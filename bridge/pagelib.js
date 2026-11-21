@@ -307,19 +307,29 @@ function agrcPageLib(V, SEL) {
       };
     };
 
-    A.overlays = () => {
-      const f = A.panel && A.panel.isConnected ? { panel: A.panel } : null;
+    const MENU_SEL = '[role=menu],[role=listbox],.monaco-menu-container,.context-view .monaco-menu,.quick-input-widget';
+    // Visible popups (menus, pickers, dialogs) in a stable order; used for both mirroring and clicking.
+    const overlayRoots = () => {
+      const panel = A.panel && A.panel.isConnected ? A.panel : null;
       const found = [];
       for (const el of document.querySelectorAll(OVERLAY_SEL)) {
         if (!isVisible(el)) continue;
         if (found.some((x) => x.contains(el))) continue;
-        if (f && f.panel.contains(el) && !el.matches('[role=menu],[role=listbox],[role=dialog]')) continue;
+        if (panel && panel.contains(el) && !el.matches('[role=menu],[role=listbox],[role=dialog]')) continue;
         if (el.matches('.quick-input-widget') && getComputedStyle(el).display === 'none') continue;
+        // Full-height panels (e.g. a conversation sidebar drawer) are layout, not menus.
+        if (!el.matches(MENU_SEL)) {
+          const r = rectOf(el);
+          if (r.height > innerHeight * 0.7 || r.width * r.height > innerWidth * innerHeight * 0.45) continue;
+        }
         for (let i = found.length - 1; i >= 0; i--) if (el.contains(found[i])) found.splice(i, 1);
         found.push(el);
       }
+      return found.slice(0, 4);
+    };
+    A.overlays = () => {
       A.urls = new Set();
-      return { overlays: found.slice(0, 4).map((el, i) => ({ i, html: cloneSanitized(el, null), label: clean(el.getAttribute('aria-label') || el.getAttribute('title') || '').slice(0, 60) })), urls: [...A.urls] };
+      return { overlays: overlayRoots().map((el, i) => ({ i, html: cloneSanitized(el, null), label: clean(el.getAttribute('aria-label') || el.getAttribute('title') || '').slice(0, 60) })), urls: [...A.urls] };
     };
 
     // ---------- actions ----------
@@ -331,9 +341,7 @@ function agrcPageLib(V, SEL) {
       if (ref.path) {
         let root = null;
         if (ref.overlay !== undefined && ref.overlay !== null) {
-          const ov = [];
-          for (const el of document.querySelectorAll(OVERLAY_SEL)) if (isVisible(el) && !ov.some((x) => x.contains(el))) ov.push(el);
-          root = ov[ref.overlay];
+          root = overlayRoots()[ref.overlay];
         } else root = A.panel && A.panel.isConnected ? A.panel : A.locate().panel;
         let el = root;
         for (const idx of ref.path) { if (!el) break; el = el.children[idx]; }

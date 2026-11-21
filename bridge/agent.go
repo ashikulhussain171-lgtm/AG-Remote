@@ -26,7 +26,7 @@ import (
 //go:embed pagelib.js
 var pageLibSrc string
 
-const libVersion = "1.2.0"
+const libVersion = "1.3.2"
 
 type Item struct {
 	ID       string `json:"id"`

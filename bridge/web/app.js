@@ -390,11 +390,16 @@ function onMirrorClick(e, frame) {
 }
 
 // ---------------- overlays (menus, pickers, dialogs) ----------------
+function overlayKey() { return JSON.stringify((S.overlays || []).map((o) => o.label + ':' + o.html.length)); }
+function updateSheet() {
+  const show = S.overlays.length > 0 && S.view === 'chat' && S.mode === 'mirror' && S.sheetDismissed !== overlayKey();
+  $('#sheet').classList.toggle('hidden', !show);
+  return show;
+}
 function onOverlays(list) {
   S.overlays = list || [];
-  if (!S.overlays.length) { $('#sheet').classList.add('hidden'); return; }
+  if (!updateSheet()) return;
   S.sheetIndex = S.overlays.length - 1;
-  $('#sheet').classList.remove('hidden');
   $('#sheetTitle').textContent = S.overlays[S.sheetIndex].label || 'Menu';
   const f = $('#sheetFrame');
   if (!f.contentDocument?.getElementById('agrc-host') || f.dataset.css !== (S.cssHash || '')) {
@@ -409,7 +414,7 @@ function renderOverlay() {
   if (S.snap) applyLook(d, S.snap);
   d.getElementById('agrc-host').innerHTML = ov.html;
 }
-$('#sheetEsc').onclick = () => act('/api/key', { key: 'Escape' });
+$('#sheetEsc').onclick = () => { S.sheetDismissed = overlayKey(); updateSheet(); act('/api/key', { key: 'Escape' }); };
 $('#sheetSend').onclick = async () => {
   const v = $('#sheetType').value;
   if (v) await act('/api/type', { text: v });
@@ -456,6 +461,7 @@ function setMode(m, remember = true) {
   $('#msg').placeholder = m === 'native' && !N.id ? 'Start a new chat with Antigravity…' : 'Message Antigravity…';
   $('#pending').classList.add('hidden');
   $('#pendingBtns').dataset.key = '';
+  if (updateSheet()) onOverlays(S.overlays);
   if (m === 'mirror') { if (S.dirtyMirror || !S.renderedOnce) rerenderMirror(); $('#winTitle').textContent = 'Live view'; }
   else { renderNativeTitle(); schedulePoll(0); }
   if (S.state && S.state.cdp) onState(S.state);
@@ -483,6 +489,7 @@ function setView(v) {
   if (v === 'screen') startScreenStream(); else if (prev === 'screen') stopScreenStream();
   if (v === 'chat' && S.mode === 'mirror' && (S.dirtyMirror || !S.renderedOnce)) rerenderMirror();
   if (v === 'chat' && S.mode === 'native') schedulePoll(0);
+  updateSheet();
   if (v !== 'chat') $('#winTitle').textContent = TITLES[v];
   else if (S.mode === 'native') renderNativeTitle();
   else if (S.state && S.state.cdp) onState(S.state);
