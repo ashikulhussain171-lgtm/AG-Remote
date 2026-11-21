@@ -39,6 +39,11 @@ Android Studio se bhi khul jata hai: `android/` folder open karo → Build → B
 
 APK hamesha `android/app/agremote.keystore` se sign hota hai, isliye har nayi build purani app ke upar update ki tarah install hogi. Yeh key sirf personal use ke liye hai — repo private rakho.
 
+## Chat kaise kaam karta hai
+- **Chat view (default):** phone app Antigravity ke andar ke agent service (language server) se seedha baat karta hai — conversations, messages, thinking, commands, file edits, approvals (Run / Allow / Deny), agent ke sawaal, Stop, New chat. Title par tap = conversations list. Composer ka "Mode" chip: auto / Planning / Fast.
+- **Live view (👁 icon):** Antigravity window ka mirror — jo cheez chat view mein na ho (settings, menus) uske liye.
+- Agent service ka protocol Google ne document nahi kiya hai; yeh open-source [Porta](https://github.com/L1M80/porta) (MIT) ke tareeke par based hai. Antigravity update ke baad kuch toote to Settings → Agent service → **Show raw data** copy karke bhejo.
+
 ## Screens (left menu ☰ se)
 | Tab | Kya karta hai |
 |---|---|
@@ -61,6 +66,6 @@ APK hamesha `android/app/agremote.keystore` se sign hota hai, isliye har nayi bu
 - Antigravity ka debug port sirf `127.0.0.1` par. Bridge port (8787) ko router par public forward mat karo — bahar se Tailscale use karo.
 
 ## Code layout
-- `bridge/` — Go (sirf standard library): `ws.go` WebSocket client, `cdp.go` DevTools protocol, `agent.go` mirror/send/click/screen, `history.go`, `files.go`, `server.go` HTTP + SSE + pairing, `launch.go` Antigravity dhoondhna/kholna, `pagelib.js` (Antigravity window ke andar chalne wala script), `web/` phone UI (exe ke andar embed).
+- `bridge/` — Go (sirf standard library): `ls.go` Antigravity agent service client, `ws.go` WebSocket client, `cdp.go` DevTools protocol, `agent.go` mirror/send/click/screen, `history.go`, `files.go`, `server.go` HTTP + SSE + pairing, `launch.go` Antigravity dhoondhna/kholna, `pagelib.js` (Antigravity window ke andar chalne wala script), `web/` phone UI (exe ke andar embed).
 - `android/` — Java WebView app: `MainActivity.java` (setup + LAN discovery + WebView), `AlertService.java` (background notifications), `assets/setup.html`.
 - Build: `cd bridge && GOOS=windows GOARCH=amd64 go build -o AGRemote-Bridge.exe .`

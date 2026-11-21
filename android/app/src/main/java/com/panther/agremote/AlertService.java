@@ -146,12 +146,21 @@ public class AlertService extends Service {
                     } else if (line.startsWith("data: ") && "state".equals(event)) {
                         JSONObject st = new JSONObject(line.substring(6));
                         JSONArray pend = st.optJSONArray("pending");
-                        int n = pend == null ? 0 : pend.length();
-                        boolean busy = st.optBoolean("busy", false);
+                        JSONArray lsWait = st.optJSONArray("lsWaiting");
+                        int nMirror = pend == null ? 0 : pend.length();
+                        int nAgent = lsWait == null ? 0 : lsWait.length();
+                        int n = nMirror + nAgent;
+                        boolean busy = st.optBoolean("busy", false) || st.optBoolean("lsRunning", false);
                         if (!first) {
                             if (n > prevPending) {
                                 StringBuilder labels = new StringBuilder();
-                                for (int i = 0; i < n; i++) {
+                                for (int i = 0; i < nAgent; i++) {
+                                    JSONObject it = lsWait.optJSONObject(i);
+                                    if (it == null) continue;
+                                    if (labels.length() > 0) labels.append(" / ");
+                                    labels.append(it.optString("label"));
+                                }
+                                for (int i = 0; i < nMirror; i++) {
                                     JSONObject it = pend.optJSONObject(i);
                                     if (it == null) continue;
                                     if (labels.length() > 0) labels.append(" / ");

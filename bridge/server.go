@@ -7,6 +7,7 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"io"
 	"io/fs"
 	"log"
@@ -16,6 +17,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -48,6 +50,7 @@ func (c *sseClient) drop() { c.once.Do(func() { close(c.kill) }) }
 type Server struct {
 	cfg  *Config
 	link *AgentLink
+	ls   *LSClient
 
 	cmu     sync.Mutex
 	clients map[string]*sseClient
@@ -64,7 +67,7 @@ type failRec struct {
 }
 
 func NewServer(cfg *Config) *Server {
-	s := &Server{cfg: cfg, clients: map[string]*sseClient{}, frames: map[*frameClient]bool{}, fails: map[string]*failRec{}}
+	s := &Server{cfg: cfg, ls: NewLSClient(), clients: map[string]*sseClient{}, frames: map[*frameClient]bool{}, fails: map[string]*failRec{}}
 	s.link = NewAgentLink(cfg, Events{
 		OnState:    func(b []byte) { s.broadcast("state", b, func(c *sseClient) bool { return true }) },
 		OnSnap:     func(b []byte) { s.broadcast("snap", b, notLite) },
@@ -76,6 +79,24 @@ func NewServer(cfg *Config) *Server {
 }
 
 func notLite(c *sseClient) bool { return !c.lite }
+
+// watchLS keeps state.lsRunning / state.lsWaiting fresh while any phone is connected,
+// so the app and the APK's background alerts see approvals requested by the agent.
+func (s *Server) watchLS() {
+	for {
+		if s.link.clients.Load() > 0 {
+			running, waiting, err := s.ls.Watch()
+			s.link.setState(func(st *State) {
+				st.LSOk = err == nil
+				st.LSRunning = running
+				st.LSWaiting = waiting
+			})
+			time.Sleep(2500 * time.Millisecond)
+		} else {
+			time.Sleep(time.Second)
+		}
+	}
+}
 
 func (s *Server) broadcast(event string, data []byte, filter func(*sseClient) bool) {
 	s.cmu.Lock()
@@ -330,6 +351,47 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	switch p {
 	case "/api/inspect":
 		writeJSON(w, 200, s.link.Inspect())
+	case "/api/ls/status":
+		writeJSON(w, 200, s.ls.Status())
+	case "/api/ls/conversations":
+		convs, err := s.ls.Conversations()
+		if err != nil {
+			writeJSON(w, 200, failRes(err.Error()))
+			return
+		}
+		writeJSON(w, 200, Result{"ok": true, "conversations": convs})
+	case "/api/ls/steps":
+		off, _ := strconv.Atoi(q.Get("offset"))
+		res, err := s.ls.Steps(q.Get("id"), off)
+		if err != nil {
+			writeJSON(w, 200, failRes(err.Error()))
+			return
+		}
+		writeJSON(w, 200, res)
+	case "/api/ls/raw":
+		m := q.Get("method")
+		if m != "GetWorkspaceInfos" && m != "GetAllCascadeTrajectories" && m != "GetCascadeTrajectory" && m != "GetCascadeTrajectorySteps" && m != "GetCascadeModelConfigData" {
+			writeJSON(w, 400, failRes("method not allowed for diagnostics"))
+			return
+		}
+		body := map[string]any{}
+		if id := q.Get("id"); id != "" {
+			body["cascadeId"] = id
+		}
+		var raw json.RawMessage
+		var err error
+		if id := q.Get("id"); id != "" {
+			raw, err = s.ls.forConv(id, m, body, 20*time.Second)
+		} else if insts := s.ls.Instances(); len(insts) > 0 {
+			raw, err = s.ls.Call(insts[0], m, body, 20*time.Second)
+		} else {
+			err = errors.New("no agent service found")
+		}
+		if err != nil {
+			writeJSON(w, 200, failRes(err.Error()))
+			return
+		}
+		writeJSON(w, 200, []byte(raw))
 	case "/api/history":
 		writeJSON(w, 200, map[string]any{"roots": historyRoots(s.cfg), "items": historyList(s.cfg)})
 	case "/api/history/item":
@@ -676,6 +738,46 @@ func (s *Server) post(w http.ResponseWriter, r *http.Request, p string) {
 			})
 		}
 		writeJSON(w, 200, Result{"ok": true, "workspaces": s.cfg.WorkspacesCopy()})
+	case "/api/ls/send":
+		var b struct {
+			ID   string `json:"id"`
+			Text string `json:"text"`
+			Mode string `json:"mode"`
+		}
+		if readJSON(r, 1<<20, &b) != nil {
+			writeJSON(w, 400, failRes("bad JSON"))
+			return
+		}
+		res, err := s.ls.Send(b.ID, b.Text, b.Mode)
+		if err != nil {
+			writeJSON(w, 200, failRes(err.Error()))
+			return
+		}
+		writeJSON(w, 200, res)
+	case "/api/ls/stop":
+		var b struct {
+			ID string `json:"id"`
+		}
+		_ = readJSON(r, 4096, &b)
+		if err := s.ls.Stop(b.ID); err != nil {
+			writeJSON(w, 200, failRes(err.Error()))
+			return
+		}
+		writeJSON(w, 200, okRes())
+	case "/api/ls/interact":
+		var b struct {
+			ID          string         `json:"id"`
+			Interaction map[string]any `json:"interaction"`
+		}
+		if readJSON(r, 64<<10, &b) != nil || b.Interaction == nil {
+			writeJSON(w, 400, failRes("bad JSON"))
+			return
+		}
+		if err := s.ls.Interact(b.ID, b.Interaction); err != nil {
+			writeJSON(w, 200, failRes(err.Error()))
+			return
+		}
+		writeJSON(w, 200, okRes())
 	case "/api/fs/write":
 		var b struct {
 			W         json.Number `json:"w"`

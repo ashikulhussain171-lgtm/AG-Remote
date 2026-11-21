@@ -58,6 +58,9 @@ type State struct {
 	InputText string       `json:"inputText"`
 	Platform  string       `json:"platform"`
 	Screen    bool         `json:"screen"`
+	LSOk      bool         `json:"lsOk"`
+	LSRunning bool         `json:"lsRunning"`
+	LSWaiting []Waiting    `json:"lsWaiting"`
 }
 
 type Probe struct {
@@ -212,6 +215,9 @@ func (a *AgentLink) setState(fn func(s *State)) {
 	}
 	if a.state.Targets == nil {
 		a.state.Targets = []TargetInfo{}
+	}
+	if a.state.LSWaiting == nil {
+		a.state.LSWaiting = []Waiting{}
 	}
 	b, _ := json.Marshal(a.state)
 	changed := string(b) != string(a.stateJSON)

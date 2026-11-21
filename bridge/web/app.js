@@ -11,7 +11,7 @@ const icon = (id) => `<svg><use href="#i-${id}"/></svg>`;
 const NATIVE = window.AGRCNative || null;
 
 const S = {
-  state: {}, snap: null, cssHash: null, overlays: [], view: 'chat', mode: store.get('mode', 'mirror'),
+  state: {}, snap: null, cssHash: null, overlays: [], view: 'chat', mode: store.get('mode2', 'native'),
   me: null, es: null, screenES: null, prevPending: 0, prevBusy: false, hist: null, renderedOnce: false,
 };
 
@@ -87,7 +87,8 @@ async function boot() {
   $('#app').classList.remove('hidden');
   $('#hostName').textContent = S.me.host || 'Laptop';
   connectEvents();
-  setMode(S.mode);
+  setMode(S.mode, false);
+  lsLoadConvs();
   setView(store.get('view', 'chat'));
   loadRecents();
 }
@@ -116,24 +117,33 @@ function onState(st) {
   S.state = st;
   const active = (st.targets || []).find((t) => t.id === st.activeId);
   const title = active ? (active.title || 'Antigravity').replace(/\s*[—-]\s*Antigravity.*$/i, '') : 'Antigravity';
-  $('#winTitle').textContent = st.cdp === 'down' ? 'Antigravity' : title;
-  if (st.cdp !== 'up') setStatus('bad', st.cdp === 'down' ? 'Not connected' : 'Connecting…');
+  if (S.mode === 'mirror' && S.view === 'chat') $('#winTitle').textContent = st.cdp === 'down' ? 'Antigravity' : title;
+  if (S.mode === 'native') { /* set below */ }
+  else if (st.cdp !== 'up') setStatus('bad', st.cdp === 'down' ? 'Not connected' : 'Connecting…');
   else if (!st.activeId || !st.found) setStatus('warn', 'Agent panel not found');
   else setStatus('ok', st.busy ? 'Working…' : 'Connected');
-  $('#subTitle').classList.toggle('busy', !!st.busy);
-  const msg = st.cdp === 'down' || !st.activeId ? st.error : !st.found ? st.reason : '';
+  if (S.mode === 'native') {
+    if (!N.err && (st.lsOk || N.convs.length)) setStatus('ok', N.busy ? 'Working…' : 'Connected');
+    else if (N.err) setStatus('warn', 'Agent service not reachable');
+    else setStatus('warn', 'Connecting…');
+  }
+  const busyNow = S.mode === 'native' ? N.busy : !!st.busy;
+  $('#subTitle').classList.toggle('busy', busyNow);
+  const msg = S.mode === 'native' ? (N.err || '') : st.cdp === 'down' || !st.activeId ? st.error : !st.found ? st.reason : '';
   $('#banner').textContent = msg || '';
   $('#banner').classList.toggle('hidden', !msg);
-  $('#stopBtn').classList.toggle('hidden', !st.busy);
-  $('#sendBtn').classList.toggle('hidden', !!st.busy && !$('#msg').value.trim());
-  renderQuick(st.controls || []);
-  renderPending(st.pending || []);
+  updateComposer();
+  renderQuick(S.mode === 'mirror' ? st.controls || [] : []);
+  if (S.mode === 'mirror') renderPending(st.pending || []);
   if (!$('#actions').classList.contains('hidden')) renderActions();
-  const pend = st.pending || [];
-  if (pend.length > S.prevPending) notify(`Approval needed: ${pend.map((p) => p.label).join(' / ')}`);
-  else if (S.prevBusy && !st.busy) notify('Antigravity finished working');
-  S.prevPending = pend.length;
-  S.prevBusy = !!st.busy;
+  const waitingN = (st.lsWaiting || []).length;
+  const pend = (st.pending || []).length + waitingN;
+  if (pend > S.prevPending) notify(waitingN ? `Approval needed: ${st.lsWaiting.map((w) => w.label).join(' / ')}` : `Approval needed: ${(st.pending || []).map((p) => p.label).join(' / ')}`);
+  else if (S.prevBusy && !(st.busy || st.lsRunning)) notify('Antigravity finished working');
+  S.prevPending = pend;
+  S.prevBusy = !!(st.busy || st.lsRunning);
+  if (waitingN && S.mode === 'native' && S.view === 'chat' && N.id && st.lsWaiting.some((w) => w.conv === N.id)) schedulePoll(0);
+  renderConvDots();
   if (S.view === 'settings') renderTargets();
 }
 
@@ -209,6 +219,7 @@ function closeSheet(sel) { $(sel).classList.add('hidden'); }
 $('#newChat').onclick = () => {
   closeDrawer();
   setView('chat');
+  if (S.mode === 'native') { nativeNewChat(); return; }
   const c = (S.state.controls || []).find((x) => NEWCHAT.test(x.label || ''));
   if (c) act('/api/click', { id: c.id, label: c.label }, 'New chat started');
   else toast("Couldn't find Antigravity's New chat button. Use the + menu instead.", 4000);
@@ -307,12 +318,12 @@ function applyLook(d, snap) {
   d.body.className = snap.bodyClass || '';
 }
 function chatVisible() { return S.view === 'chat' && S.mode === 'mirror' && !document.hidden; }
+function nativeVisible() { return S.view === 'chat' && S.mode === 'native' && !document.hidden; }
 function onSnap(snap) {
   S.snap = snap;
   if (!mirrorReady) mirrorReady = setupFrame($('#mirror'), S.cssHash);
   if (chatVisible()) mirrorReady.then(() => renderSnap(snap));
   else S.dirtyMirror = true; // render when the chat becomes visible (hidden iframes have no width)
-  renderText(snap);
 }
 function rerenderMirror() { if (S.snap && mirrorReady) mirrorReady.then(() => renderSnap(S.snap)); }
 const nearBottom = (el) => el.scrollHeight - el.scrollTop - el.clientHeight < 90;
@@ -340,22 +351,16 @@ function fitWidth(d) {
 }
 function onMirrorScroll() {
   let el;
-  if (S.mode === 'text') el = $('#textView');
+  if (S.mode === 'native') el = $('#native');
   else { const d = $('#mirror').contentDocument; if (!d) return; el = d.scrollingElement || d.documentElement; }
   $('#toBottom').classList.toggle('hidden', nearBottom(el));
 }
-$('#textView').addEventListener('scroll', onMirrorScroll, { passive: true });
+$('#native').addEventListener('scroll', onMirrorScroll, { passive: true });
 $('#toBottom').onclick = () => {
-  if (S.mode === 'text') { const t = $('#textView'); t.scrollTop = t.scrollHeight; return; }
+  if (S.mode === 'native') { const t = $('#native'); t.scrollTop = t.scrollHeight; return; }
   const se = $('#mirror').contentDocument.scrollingElement;
   se.scrollTop = se.scrollHeight;
 };
-function renderText(snap) {
-  const t = $('#textView');
-  const stick = nearBottom(t);
-  t.textContent = snap.text || '';
-  if (stick) t.scrollTop = t.scrollHeight;
-}
 function pathOf(el, root) {
   const p = [];
   for (let n = el; n && n !== root; n = n.parentElement) {
@@ -419,8 +424,7 @@ function autosize() { msg.style.height = 'auto'; msg.style.height = Math.min(msg
 msg.addEventListener('input', () => {
   autosize();
   store.set('draft', msg.value);
-  $('#sendBtn').disabled = !msg.value.trim();
-  $('#sendBtn').classList.toggle('hidden', !!S.state.busy && !msg.value.trim());
+  updateComposer();
 });
 autosize();
 $('#sendBtn').disabled = !msg.value.trim();
@@ -428,25 +432,36 @@ async function sendMsg() {
   const text = msg.value;
   if (!text.trim()) return;
   $('#sendBtn').disabled = true;
+  if (S.mode === 'native') {
+    const ok = await nativeSend(text);
+    if (ok) { msg.value = ''; store.set('draft', ''); autosize(); }
+    $('#sendBtn').disabled = !msg.value.trim();
+    return;
+  }
   const r = await act('/api/send', { text });
   if (r && r.ok) { msg.value = ''; store.set('draft', ''); autosize(); }
   $('#sendBtn').disabled = !msg.value.trim();
 }
 $('#sendBtn').onclick = sendMsg;
-$('#stopBtn').onclick = () => act('/api/stop', {}, 'Stopped');
+$('#stopBtn').onclick = () => (S.mode === 'native' ? act('/api/ls/stop', { id: N.id }, 'Stopped').then(() => schedulePoll(300)) : act('/api/stop', {}, 'Stopped'));
 
-function setMode(m) {
+function setMode(m, remember = true) {
+  if (m !== 'native' && m !== 'mirror') m = 'native';
   S.mode = m;
-  store.set('mode', m);
+  if (remember) store.set('mode2', m);
   $('#mirror').classList.toggle('hidden', m !== 'mirror');
-  $('#textView').classList.toggle('hidden', m !== 'text');
-  $('#viewBtn').innerHTML = m === 'mirror' ? icon('text') : icon('eye');
-  $('#viewBtn').setAttribute('aria-label', m === 'mirror' ? 'Show plain text' : 'Show live view');
-  if (m === 'text') { const t = $('#textView'); t.scrollTop = t.scrollHeight; }
-  else if (S.dirtyMirror || !S.renderedOnce) rerenderMirror();
+  $('#native').classList.toggle('hidden', m !== 'native');
+  $('#viewBtn').innerHTML = m === 'mirror' ? icon('chat') : icon('eye');
+  $('#viewBtn').setAttribute('aria-label', m === 'mirror' ? 'Show chat' : 'Show live view of Antigravity');
+  $('#msg').placeholder = m === 'native' && !N.id ? 'Start a new chat with Antigravity…' : 'Message Antigravity…';
+  $('#pending').classList.add('hidden');
+  $('#pendingBtns').dataset.key = '';
+  if (m === 'mirror') { if (S.dirtyMirror || !S.renderedOnce) rerenderMirror(); $('#winTitle').textContent = 'Live view'; }
+  else { renderNativeTitle(); schedulePoll(0); }
+  if (S.state && S.state.cdp) onState(S.state);
   onMirrorScroll();
 }
-$('#viewBtn').onclick = () => setMode(S.mode === 'mirror' ? 'text' : 'mirror');
+$('#viewBtn').onclick = () => { setMode(S.mode === 'mirror' ? 'native' : 'mirror'); toast(S.mode === 'mirror' ? 'Live view of the Antigravity window' : 'Chat view'); };
 
 // ---------------- navigation ----------------
 function openDrawer() { $('#drawer').classList.add('open'); $('#scrim').classList.remove('hidden'); loadRecents(); }
@@ -466,7 +481,11 @@ function setView(v) {
   $$('.view').forEach((s) => s.classList.toggle('on', s.id === 'v-' + v));
   $('#viewBtn').classList.toggle('hidden', v !== 'chat');
   if (v === 'screen') startScreenStream(); else if (prev === 'screen') stopScreenStream();
-  if (v === 'chat' && (S.dirtyMirror || !S.renderedOnce)) rerenderMirror();
+  if (v === 'chat' && S.mode === 'mirror' && (S.dirtyMirror || !S.renderedOnce)) rerenderMirror();
+  if (v === 'chat' && S.mode === 'native') schedulePoll(0);
+  if (v !== 'chat') $('#winTitle').textContent = TITLES[v];
+  else if (S.mode === 'native') renderNativeTitle();
+  else if (S.state && S.state.cdp) onState(S.state);
   if (v === 'history' && !S.hist) loadHistory();
   if (v === 'files') loadFiles();
   if (v === 'settings') renderSettings();
@@ -539,6 +558,7 @@ document.addEventListener('visibilitychange', () => {
   else {
     if (S.view === 'screen') startScreenStream();
     if (S.view === 'chat' && S.dirtyMirror) rerenderMirror();
+    if (nativeVisible()) schedulePoll(0);
   }
 });
 window.addEventListener('resize', () => { if (S.view === 'chat' && S.mode === 'mirror') { const d = $('#mirror').contentDocument; if (d?.getElementById('agrc-host')) fitWidth(d); } });
@@ -558,6 +578,7 @@ async function fetchHistory() {
   return r;
 }
 async function loadRecents() {
+  if (N.convs.length) { renderRecentsLS(); return; }
   const r = S.hist || (await fetchHistory());
   const box = $('#recents');
   if (!r) return;
@@ -795,6 +816,399 @@ async function loadGit() {
   }
 }
 
+// ---------------- native chat (Antigravity's agent service) ----------------
+const N = { convs: [], id: store.get('conv', null), steps: [], sj: [], status: '', busy: false, err: '', timer: null, convAt: 0, pending: null, mode: store.get('plannerMode', 'auto'), loading: false, newChat: false };
+const RUNNING = 'CASCADE_RUN_STATUS_RUNNING';
+const WAITING = 'CORTEX_STEP_STATUS_WAITING';
+const stepType = (s) => String(s.type || '').replace(/^CORTEX_STEP_TYPE_/, '');
+const itemsText = (items) => (items || []).map((i) => i.text || '').join('');
+const base = (u) => String(u || '').replace(/^file:\/\//, '').replace(/[\\/]+$/, '').split(/[\\/]/).pop() || u || '';
+
+function schedulePoll(ms) {
+  clearTimeout(N.timer);
+  N.timer = setTimeout(nativeTick, ms);
+}
+async function nativeTick() {
+  if (!nativeVisible()) { N.timer = null; return; }
+  try {
+    if (Date.now() - N.convAt > 5000 || !N.convs.length) await lsLoadConvs();
+    if (N.id) await lsLoadSteps(false);
+  } catch {}
+  const waiting = N.steps.some((s) => s && s.status === WAITING);
+  schedulePoll(N.busy && !waiting ? 1000 : 2500);
+}
+async function lsLoadConvs() {
+  N.convAt = Date.now();
+  const r = await api('/api/ls/conversations').catch(() => null);
+  if (!r) return;
+  if (!r.ok) {
+    N.err = r.reason || "Can't reach Antigravity's agent service";
+    if (!N.convs.length && S.mode === 'native') {
+      if (localStorage.getItem('agrc.mode2') === null && S.state.found) { setMode('mirror', false); toast('Showing the live view (agent service not reachable)', 4000); }
+      else N.err += ' — tap the eye icon for the live view.';
+    }
+    onState(S.state);
+    if (!N.steps.length) renderNative(true);
+    return;
+  }
+  N.err = '';
+  N.convs = r.conversations || [];
+  if (!N.id && !N.newChat && N.convs.length) selectConv(N.convs[0].id, false);
+  if (N.id && !N.convs.some((c) => c.id === N.id) && N.convs.length && !N.newChat && !N.sending) selectConv(N.convs[0].id, false);
+  renderNativeTitle();
+  renderRecentsLS();
+  if (!$('#convSheet').classList.contains('hidden')) renderConvSheet();
+  onState(S.state);
+}
+function curConv() { return N.convs.find((c) => c.id === N.id) || null; }
+function renderNativeTitle() {
+  if (S.mode !== 'native' || S.view !== 'chat') return;
+  const c = curConv();
+  $('#winTitle').textContent = N.newChat || !N.id ? 'New chat' : c?.title || 'Conversation';
+  $('#msg').placeholder = !N.id ? 'Start a new chat with Antigravity…' : 'Message Antigravity…';
+}
+function selectConv(id, focus = true) {
+  if (N.id !== id) { N.id = id; N.steps = []; N.sj = []; N.status = ''; N.busy = false; $('#nativeList').innerHTML = ''; }
+  N.newChat = false;
+  store.set('conv', id);
+  renderNativeTitle();
+  if (focus) { setView('chat'); setMode('native'); }
+  schedulePoll(0);
+}
+function nativeNewChat() {
+  N.id = null; N.newChat = true; N.steps = []; N.sj = []; N.status = ''; N.busy = false;
+  store.set('conv', null);
+  renderNativeTitle();
+  renderNative(true);
+  updateComposer();
+  $('#msg').focus();
+}
+async function lsLoadSteps(full) {
+  if (N.loading) return;
+  N.loading = true;
+  const id = N.id;
+  const offset = full || !N.steps.length ? 0 : Math.max(0, N.steps.length - 8);
+  const r = await api(`/api/ls/steps?id=${encodeURIComponent(id)}&offset=${offset}`).catch(() => null);
+  N.loading = false;
+  if (!r || id !== N.id) return;
+  if (!r.ok) { N.err = r.reason || 'Could not load this conversation'; onState(S.state); return; }
+  N.err = '';
+  const changed = [];
+  r.steps.forEach((st, i) => {
+    const idx = r.offset + i;
+    const j = JSON.stringify(st);
+    if (N.sj[idx] !== j) { N.sj[idx] = j; N.steps[idx] = st; changed.push(idx); }
+  });
+  if (r.offset === 0 && N.steps.length > r.steps.length) { N.steps.length = r.steps.length; N.sj.length = r.steps.length; changed.push(-1); }
+  const conv = curConv();
+  N.status = r.status || conv?.status || '';
+  N.busy = N.status === RUNNING;
+  if (N.pending && N.steps.some((s) => stepType(s) === 'USER_INPUT' && itemsText(s.userInput?.items).trim() === N.pending.trim())) N.pending = null;
+  if (changed.length || N.pending === null) renderNative(changed.includes(-1) || !$('#nativeList').children.length, changed);
+  onState(S.state);
+}
+
+// --- rendering ---
+function filePermOf(step) {
+  let f = step.filePermissionRequest || step.viewFile?.filePermissionRequest || step.listDirectory?.filePermissionRequest || step.codeAction?.filePermissionRequest ||
+    step.grepSearch?.filePermissionRequest || step.viewFileOutline?.filePermissionRequest || step.viewCodeItem?.filePermissionRequest;
+  if (f) return { ...f, action: f.action || (step.codeAction ? 'write_file' : 'read_file'), kind: 'filePermission' };
+  const p = step.requestedInteraction?.permission;
+  if (p?.resource && (p.resource.action === 'read_file' || p.resource.action === 'write_file')) return { absolutePathUri: p.resource.target || '', action: p.resource.action, kind: 'permission' };
+  return null;
+}
+function askOf(step) {
+  const q = step.askQuestion || step.requestedInteraction?.askQuestion;
+  return q?.questions?.length ? q : null;
+}
+function trajOf(step, idx) {
+  const info = step.metadata?.sourceTrajectoryStepInfo || {};
+  return { trajectoryId: info.trajectoryId || curConv()?.trajectoryId || '', stepIndex: info.stepIndex ?? idx };
+}
+async function interact(idx, extra, okMsg) {
+  const step = N.steps[idx];
+  const r = await act('/api/ls/interact', { id: N.id, interaction: { ...trajOf(step, idx), ...extra } }, okMsg);
+  schedulePoll(400);
+  return r;
+}
+function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; }
+function card(iconId, title, bodyHtml, open) {
+  const c = el('div', 'st-card');
+  const h = el('div', 'st-head', `${icon(iconId)}<span class="ellipsis">${title}</span>`);
+  c.appendChild(h);
+  if (bodyHtml) {
+    const b = el('div', 'st-body' + (open ? '' : ' hidden'), bodyHtml);
+    c.appendChild(b);
+    h.onclick = () => b.classList.toggle('hidden');
+  }
+  return c;
+}
+function statusMark(step) {
+  const st = step.status || '';
+  if (/RUNNING|GENERATING|QUEUED|PENDING/.test(st)) return '<span class="spin-s"></span>';
+  if (/ERROR/.test(st)) return '<span class="st-err">failed</span>';
+  if (/CANCELED|INTERRUPTED/.test(st)) return '<span class="muted">stopped</span>';
+  return '';
+}
+function line(iconId, text, step) {
+  return el('div', 'st-line', `${icon(iconId)}<span class="ellipsis">${text}</span>${statusMark(step)}`);
+}
+function actionRow(btns) {
+  const row = el('div', 'st-actions');
+  for (const [label, cls, fn] of btns) {
+    const b = el('button', 'btn ' + cls);
+    b.textContent = label;
+    b.onclick = async () => { row.querySelectorAll('button').forEach((x) => (x.disabled = true)); const r = await fn(); if (!r || r.ok === false) row.querySelectorAll('button').forEach((x) => (x.disabled = false)); };
+    row.appendChild(b);
+  }
+  return row;
+}
+function waitingActions(step, idx) {
+  const fp = filePermOf(step);
+  if (fp) {
+    const verb = fp.action === 'write_file' ? 'write to' : 'read';
+    const allow = (scope) => fp.kind === 'permission'
+      ? interact(idx, { permission: { allow: true } }, 'Allowed')
+      : interact(idx, { filePermission: { allow: true, scope, absolutePathUri: fp.absolutePathUri } }, 'Allowed');
+    const deny = () => fp.kind === 'permission' ? interact(idx, { permission: { allow: false } }, 'Denied') : interact(idx, { filePermission: { allow: false, scope: 1, absolutePathUri: fp.absolutePathUri } }, 'Denied');
+    return { title: `Allow Antigravity to ${verb} ${esc(base(fp.absolutePathUri))}?`, buttons: fp.kind === 'permission' ? [['Allow', 'primary', () => allow(1)], ['Deny', '', deny]] : [['Allow once', 'primary', () => allow(1)], ['Allow for this chat', '', () => allow(2)], ['Deny', '', deny]] };
+  }
+  if (askOf(step)) return null; // rendered inline as a question card
+  const t = stepType(step);
+  const perm = step.requestedInteraction?.permission;
+  let title = 'Antigravity needs your approval';
+  if (t === 'RUN_COMMAND') title = `Run command: <span class="cmdline">${esc(step.runCommand?.commandLine || step.runCommand?.proposedCommandLine || '')}</span>`;
+  else if (perm?.resource) title = `Allow ${esc(perm.resource.action || 'action')}: ${esc(perm.resource.target || '')}`;
+  else if (step.metadata?.toolSummary) title = esc(step.metadata.toolSummary);
+  const yes = t === 'RUN_COMMAND' ? 'Run' : 'Allow';
+  const no = t === 'RUN_COMMAND' ? 'Reject' : 'Deny';
+  return { title, buttons: [[yes, 'primary', () => interact(idx, { permission: { allow: true } }, yes === 'Run' ? 'Running' : 'Allowed')], [no, '', () => interact(idx, { permission: { allow: false } }, 'Rejected')]] };
+}
+function questionCard(step, idx, q) {
+  const c = el('div', 'st-card' + (step.status === WAITING ? ' st-wait' : ''));
+  const body = el('div', 'st-body');
+  const picks = q.questions.map((qq) => new Set(qq.selectedOptionIds || []));
+  q.questions.forEach((qq, qi) => {
+    body.appendChild(el('div', 'md', md(qq.question || 'Question')));
+    const opts = el('div', 'q-opts');
+    (qq.options || []).forEach((o) => {
+      const b = el('button', 'q-opt' + (picks[qi].has(o.id) ? ' on' : ''));
+      b.textContent = o.text || o.id;
+      b.disabled = step.status !== WAITING;
+      b.onclick = () => {
+        if (!qq.isMultiSelect) { picks[qi].clear(); opts.querySelectorAll('.q-opt').forEach((x) => x.classList.remove('on')); }
+        if (picks[qi].has(o.id)) { picks[qi].delete(o.id); b.classList.remove('on'); } else { picks[qi].add(o.id); b.classList.add('on'); }
+      };
+      opts.appendChild(b);
+    });
+    body.appendChild(opts);
+  });
+  c.appendChild(body);
+  if (step.status === WAITING) {
+    c.appendChild(actionRow([
+      ['Send answer', 'primary', () => interact(idx, { askQuestion: { responses: q.questions.map((qq, qi) => ({ ...qq, selectedOptionIds: [...picks[qi]] })), cancelled: false } }, 'Answered')],
+      ['Skip', '', () => interact(idx, { askQuestion: { responses: [], cancelled: true } }, 'Skipped')],
+    ]));
+  }
+  return c;
+}
+function diffLines(lines) {
+  return `<div class="diff">${(lines || []).map((l) => { const t = l.type || ''; const cls = /INSERT/.test(t) ? 'a' : /DELETE/.test(t) ? 'd' : /HUNK/.test(t) ? 'h' : ''; const p = cls === 'a' ? '+' : cls === 'd' ? '-' : ' '; return `<div class="${cls}">${esc(cls === 'h' ? l.text : p + (l.text || ''))}</div>`; }).join('')}</div>`;
+}
+function renderStep(step, idx) {
+  const t = stepType(step);
+  const wrap = el('div');
+  wrap.dataset.i = idx;
+  const sans = store.get('font', 'serif') === 'sans';
+  switch (t) {
+    case 'USER_INPUT': {
+      const d = el('div', 'msg-user');
+      d.textContent = itemsText(step.userInput?.items) || (step.userInput?.media?.length ? '[image]' : '');
+      wrap.appendChild(d);
+      break;
+    }
+    case 'PLANNER_RESPONSE': {
+      const p = step.plannerResponse || {};
+      if (p.thinking) {
+        const th = el('details', 'thinking', `<summary>${icon('clock')}Thought${p.thinkingDuration ? ' for ' + esc(String(p.thinkingDuration).replace(/(\.\d)\d*s$/, '$1s')) : ''}</summary><div></div>`);
+        th.querySelector('div').textContent = p.thinking;
+        wrap.appendChild(th);
+      }
+      const text = p.modifiedResponse || itemsText(p.items);
+      if (text) wrap.appendChild(el('div', 'msg-ai md' + (sans ? ' sans' : ''), md(text)));
+      else if (/RUNNING|GENERATING/.test(step.status || '')) wrap.appendChild(line('chat', 'Thinking…', step));
+      break;
+    }
+    case 'RUN_COMMAND': {
+      const rc = step.runCommand || {};
+      const cmd = rc.commandLine || rc.proposedCommandLine || rc.command || '';
+      const out = rc.combinedOutput?.full || rc.output || '';
+      const c = card('screen', `<span class="cmdline">$ ${esc(cmd)}</span> ${statusMark(step)}${rc.exitCode ? ` <span class="st-err">exit ${rc.exitCode}</span>` : ''}`, out ? `<pre>${esc(out.slice(-20000))}</pre>` : '', false);
+      wrap.appendChild(c);
+      break;
+    }
+    case 'CODE_ACTION': {
+      const ca = step.codeAction || {};
+      const f = ca.actionResult?.edit?.absoluteUri || ca.actionSpec?.createFile?.path?.absoluteUri || '';
+      const lines = ca.actionResult?.edit?.diff?.unifiedDiff?.lines;
+      const verb = ca.actionResult?.edit?.createFile || ca.actionSpec?.createFile ? 'Created' : 'Edited';
+      const c = card('file', `${verb} <b>${esc(base(f) || 'file')}</b> ${statusMark(step)}`, (ca.description ? `<div class="md" style="margin-bottom:8px">${md(ca.description)}</div>` : '') + (lines?.length ? diffLines(lines) : ''), false);
+      wrap.appendChild(c);
+      break;
+    }
+    case 'VIEW_FILE': wrap.appendChild(line('file', `Read ${esc(base(step.viewFile?.absolutePathUri))}${step.viewFile?.startLine ? ` · lines ${step.viewFile.startLine}–${step.viewFile.endLine || ''}` : ''}`, step)); break;
+    case 'VIEW_FILE_OUTLINE': wrap.appendChild(line('file', `Outlined ${esc(base(step.viewFileOutline?.absolutePathUri))}`, step)); break;
+    case 'VIEW_CODE_ITEM': wrap.appendChild(line('code', `Viewed ${esc((step.viewCodeItem?.nodePaths || []).join(', ') || base(step.viewCodeItem?.absoluteUri))}`, step)); break;
+    case 'LIST_DIRECTORY': wrap.appendChild(line('folder', `Listed ${esc(base(step.listDirectory?.directoryPathUri))}`, step)); break;
+    case 'GREP_SEARCH': wrap.appendChild(line('search', `Searched “${esc(step.grepSearch?.query || '')}”`, step)); break;
+    case 'FIND': wrap.appendChild(line('search', `Found files matching ${esc(step.find?.pattern || '')}`, step)); break;
+    case 'COMMAND_STATUS': wrap.appendChild(line('screen', `Checked command output`, step)); break;
+    case 'SEND_COMMAND_INPUT': wrap.appendChild(line('screen', step.sendCommandInput?.terminate ? 'Stopped a command' : 'Sent input to a command', step)); break;
+    case 'AGREMOTE_UNREADABLE': wrap.appendChild(line('tool', 'A very large step could not be loaded', step)); break;
+    default: {
+      const q = askOf(step);
+      if (q) { wrap.appendChild(questionCard(step, idx, q)); break; }
+      const label = step.metadata?.toolSummary || step.metadata?.toolCall?.name || t.toLowerCase().replace(/_/g, ' ');
+      if (label && t !== 'EPHEMERAL_MESSAGE' && t !== 'CHECKPOINT') wrap.appendChild(line('tool', esc(label), step));
+    }
+  }
+  if (step.status === WAITING) {
+    const w = waitingActions(step, idx);
+    if (w) {
+      const c = el('div', 'st-card st-wait');
+      c.appendChild(el('div', 'st-head', `${icon('tool')}<span>${w.title}</span>`));
+      c.appendChild(actionRow(w.buttons));
+      wrap.appendChild(c);
+    }
+  }
+  return wrap;
+}
+function renderNative(full, changed = []) {
+  const list = $('#nativeList');
+  const box = $('#native');
+  const stick = nearBottom(box) || full;
+  if (!N.id || (!N.steps.length && N.newChat)) {
+    list.innerHTML = `<div class="welcome"><h2 class="serif">What should Antigravity work on?</h2><p class="muted">${N.err ? esc(N.err) : 'Your message starts a new conversation in Antigravity on your laptop.'}</p></div>`;
+  } else if (full) {
+    list.innerHTML = '';
+    N.steps.forEach((s, i) => { if (s) list.appendChild(renderStep(s, i)); });
+  } else {
+    for (const i of changed) {
+      if (i < 0 || !N.steps[i]) continue;
+      const node = renderStep(N.steps[i], i);
+      const old = list.querySelector(`:scope > [data-i="${i}"]`);
+      if (old) old.replaceWith(node);
+      else {
+        const after = [...list.children].find((c) => c.dataset.i !== undefined && Number(c.dataset.i) > i);
+        list.insertBefore(node, after || list.querySelector('.msg-user.pending') || null);
+      }
+    }
+  }
+  list.querySelector('.msg-user.pending')?.remove();
+  if (N.pending) { const p = el('div', 'msg-user pending'); p.textContent = N.pending; list.appendChild(p); }
+  renderNativeApproval();
+  if (stick) box.scrollTop = box.scrollHeight;
+  onMirrorScroll();
+}
+function renderNativeApproval() {
+  if (S.mode !== 'native') return;
+  let idx = -1;
+  for (let i = N.steps.length - 1; i >= 0; i--) if (N.steps[i]?.status === WAITING) { idx = i; break; }
+  const w = idx >= 0 ? waitingActions(N.steps[idx], idx) : null;
+  const q = idx >= 0 && !w ? askOf(N.steps[idx]) : null;
+  $('#pending').classList.toggle('hidden', !w && !q);
+  const key = idx + ':' + (N.sj[idx] || '');
+  if ($('#pendingBtns').dataset.key === key) return;
+  $('#pendingBtns').dataset.key = key;
+  if (w) {
+    $('#approvalText').innerHTML = w.title;
+    const row = actionRow(w.buttons);
+    $('#pendingBtns').replaceChildren(...row.children);
+  } else if (q) {
+    $('#approvalText').textContent = 'Antigravity asked you a question';
+    const b = el('button', 'btn primary');
+    b.textContent = 'Answer';
+    b.onclick = () => { const n = $(`#nativeList [data-i="${idx}"]`); n?.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+    $('#pendingBtns').replaceChildren(b);
+  }
+}
+async function nativeSend(text) {
+  N.pending = text;
+  N.sending = true;
+  renderNative(!N.steps.length && true);
+  const mode = N.mode === 'auto' ? '' : N.mode;
+  const r = await act('/api/ls/send', { id: N.id || '', text, mode });
+  N.sending = false;
+  if (!r || r.ok === false) { N.pending = null; renderNative(!N.steps.length); return false; }
+  if (r.id && r.id !== N.id) { N.id = r.id; N.newChat = false; store.set('conv', r.id); N.convAt = 0; }
+  N.busy = true;
+  renderNativeTitle();
+  schedulePoll(300);
+  return true;
+}
+function updateComposer() {
+  const native = S.mode === 'native';
+  const busy = native ? N.busy : !!S.state.busy;
+  const has = !!$('#msg').value.trim();
+  $('#stopBtn').classList.toggle('hidden', !busy || (native && !N.id));
+  $('#sendBtn').classList.toggle('hidden', busy && !has);
+  $('#sendBtn').disabled = !has;
+  $('#moreBtn').classList.toggle('hidden', native);
+  const mc = $('#modeChip');
+  if (native) {
+    if (!mc) {
+      const b = el('button', 'chip');
+      b.id = 'modeChip';
+      b.onclick = () => { N.mode = { auto: 'planning', planning: 'fast', fast: 'auto' }[N.mode] || 'auto'; store.set('plannerMode', N.mode); updateComposer(); toast(N.mode === 'auto' ? "Mode: Antigravity's current setting" : `Mode: ${N.mode === 'planning' ? 'Planning' : 'Fast'}`); };
+      $('#quickCtl').before(b);
+    }
+    $('#modeChip').textContent = N.mode === 'planning' ? 'Planning' : N.mode === 'fast' ? 'Fast' : 'Mode: auto';
+  } else if (mc) mc.remove();
+}
+function renderRecentsLS() {
+  const box = $('#recents');
+  box.innerHTML = '';
+  for (const c of N.convs.slice(0, 20)) {
+    const b = document.createElement('button');
+    const waiting = (S.state.lsWaiting || []).some((w) => w.conv === c.id);
+    b.innerHTML = `<span class="conv-dot ${waiting ? 'wait' : c.status === RUNNING ? 'run' : ''}" style="display:inline-block;margin-right:8px"></span>${esc(c.title || 'Untitled')}`;
+    b.onclick = () => { closeDrawer(); selectConv(c.id); };
+    box.appendChild(b);
+  }
+}
+function renderConvSheet() {
+  const box = $('#convList');
+  box.innerHTML = N.convs.length ? '' : `<div class="empty">${esc(N.err || 'No conversations yet')}</div>`;
+  for (const c of N.convs) {
+    const waiting = (S.state.lsWaiting || []).some((w) => w.conv === c.id);
+    const d = el('div', 'item', `<span class="conv-dot ${waiting ? 'wait' : c.status === RUNNING ? 'run' : ''}"></span><div class="grow"><div class="t">${esc(c.title || 'Untitled')}</div><div class="m">${esc(c.workspace || '')}${c.workspace ? ' · ' : ''}${c.modified ? esc(ago(Date.parse(c.modified))) : ''}${waiting ? ' · needs approval' : c.status === RUNNING ? ' · working' : ''}</div></div>`);
+    if (c.id === N.id) d.style.background = 'var(--hover)';
+    d.onclick = () => { closeSheet('#convSheet'); selectConv(c.id); };
+    box.appendChild(d);
+  }
+}
+function renderConvDots() {
+  if (!$('#drawer').classList.contains('open') || !N.convs.length) return;
+  renderRecentsLS();
+}
+$('#titleBtn').onclick = () => {
+  if (S.mode !== 'native' || S.view !== 'chat') return;
+  renderConvSheet();
+  $('#convSheet').classList.remove('hidden');
+  lsLoadConvs();
+};
+$('#convNew').onclick = () => { closeSheet('#convSheet'); nativeNewChat(); };
+$('#lsRaw').onclick = async () => {
+  const out = $('#lsRawOut');
+  out.innerHTML = '<div class="muted small">Loading…</div>';
+  const st = await api('/api/ls/status').catch((e) => ({ error: e.message }));
+  const convs = await api('/api/ls/raw?method=GetAllCascadeTrajectories').catch((e) => ({ error: e.message }));
+  let steps = null;
+  if (N.id) steps = await api(`/api/ls/steps?id=${encodeURIComponent(N.id)}&offset=${Math.max(0, N.steps.length - 3)}`).catch((e) => ({ error: e.message }));
+  const text = JSON.stringify({ status: st, conversations: convs, lastSteps: steps }, null, 1);
+  out.innerHTML = `<details open><summary class="small muted">Copy this and send it if the chat looks wrong</summary><pre class="small" style="white-space:pre-wrap;word-break:break-all;max-height:50vh;overflow:auto">${esc(text.slice(0, 60000))}</pre></details>`;
+};
+
 // ---------------- settings ----------------
 function segBind(sel, key, def, after) {
   $$(sel + ' button').forEach((b) => {
@@ -810,6 +1224,12 @@ async function renderSettings() {
   segBind('#styleSeg', 'chatStyle', 'clean', rerenderMirror);
   segBind('#fontSeg', 'font', 'serif', rerenderMirror);
   renderTargets();
+  api('/api/ls/status').then((r) => {
+    const inst = r.instances || [];
+    $('#lsInfo').innerHTML = r.ok
+      ? inst.map((i) => `Connected · ${esc(i.app || 'antigravity')} · port ${i.port} (${esc(i.proto)}) · ${esc((i.workspace || '').replace(/^file:\/\//, '') || 'no workspace')}`).join('<br>')
+      : `<span class="err">${esc(r.error || 'Not found')}</span>`;
+  }).catch(() => {});
   $('#selInput').value = S.me.selectors?.input || '';
   $('#selPanel').value = S.me.selectors?.panel || '';
   $('#poll').value = S.me.pollMs;

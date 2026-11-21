@@ -72,11 +72,11 @@
 
     <header id="top">
       <button class="icon" id="menuBtn" aria-label="Open menu"><svg><use href="#i-menu"/></svg></button>
-      <div class="top-title">
+      <div class="top-title" id="titleBtn" role="button" tabindex="0">
         <div id="winTitle" class="ellipsis">Connecting…</div>
         <div id="subTitle" class="ellipsis"><span id="dot" class="dot"></span><span id="subText">Connecting</span></div>
       </div>
-      <button class="icon" id="viewBtn" aria-label="Switch view"><svg><use href="#i-text"/></svg></button>
+      <button class="icon" id="viewBtn" aria-label="Switch view"><svg><use href="#i-eye"/></svg></button>
     </header>
 
     <main>
@@ -84,13 +84,13 @@
       <section id="v-chat" class="view">
         <div id="banner" class="notice hidden"></div>
         <div id="mirrorWrap">
-          <iframe id="mirror" sandbox="allow-same-origin" title="Antigravity agent"></iframe>
-          <div id="textView" class="textview hidden"></div>
+          <div id="native" class="native"><div id="nativeList" class="native-list"></div></div>
+          <iframe id="mirror" class="hidden" sandbox="allow-same-origin" title="Antigravity live view"></iframe>
           <button id="toBottom" class="fab hidden" aria-label="Scroll to bottom"><svg><use href="#i-down"/></svg></button>
         </div>
         <div id="dock">
           <div id="pending" class="approval hidden">
-            <div class="approval-title"><span class="pulse"></span>Antigravity is waiting for your approval</div>
+            <div class="approval-title"><span class="pulse"></span><span id="approvalText">Antigravity is waiting for your approval</span></div>
             <div id="pendingBtns" class="approval-btns"></div>
           </div>
           <div class="composer">
@@ -158,7 +158,7 @@
         <div class="card">
           <h3>Appearance</h3>
           <div class="field"><span>Theme</span><div class="seg" id="themeSeg"><button data-v="auto">Auto</button><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div>
-          <div class="field"><span>Chat style</span><div class="seg" id="styleSeg"><button data-v="clean">Clean</button><button data-v="original">Original</button></div></div>
+          <div class="field"><span>Live view style</span><div class="seg" id="styleSeg"><button data-v="clean">Clean</button><button data-v="original">Original</button></div></div>
           <div class="field"><span>Response font</span><div class="seg" id="fontSeg"><button data-v="serif">Serif</button><button data-v="sans">Sans</button></div></div>
           <label class="check"><input type="checkbox" id="fitWidth"> Fit chat to screen width</label>
         </div>
@@ -172,7 +172,13 @@
           <label class="check"><input type="checkbox" id="vibrate"> Vibrate when Antigravity needs approval</label>
           <label class="field col-field"><span>Refresh speed <b id="pollVal"></b> ms</span><input type="range" id="poll" min="250" max="3000" step="50"></label>
         </div>
-        <div class="card"><h3>Antigravity windows</h3><div id="targets"></div></div>
+        <div class="card">
+          <h3>Agent service</h3>
+          <div id="lsInfo" class="small muted">Checking…</div>
+          <div class="row" style="margin-top:8px"><button id="lsRaw" class="btn">Show raw data</button></div>
+          <div id="lsRawOut"></div>
+        </div>
+        <div class="card"><h3>Antigravity windows (live view)</h3><div id="targets"></div></div>
         <div class="card">
           <h3>Workspaces</h3>
           <div id="wsList"></div>
@@ -197,6 +203,13 @@
       <div class="sheet-head"><b id="sheetTitle">Menu</b><button id="sheetEsc" class="btn ghost">Close</button></div>
       <iframe id="sheetFrame" sandbox="allow-same-origin" title="Menu"></iframe>
       <div class="row pad"><input id="sheetType" placeholder="Type into this box…"><button id="sheetSend" class="btn primary">Enter</button></div>
+    </div>
+
+    <!-- conversations -->
+    <div id="convSheet" class="sheet short hidden">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head"><b>Conversations</b><button id="convNew" class="btn ghost">New chat</button></div>
+      <div id="convList" class="list scroll"></div>
     </div>
 
     <!-- all detected panel controls -->

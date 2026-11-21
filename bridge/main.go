@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-var version = "1.2.0"
+var version = "1.3.0"
 
 const usage = `AGRemote-Bridge %s — control Antigravity from your phone
 
@@ -116,6 +116,7 @@ func main() {
 	fmt.Println()
 
 	srv.link.Start()
+	go srv.watchLS()
 	hs := &http.Server{Handler: srv, ReadHeaderTimeout: 10 * time.Second}
 	if err := hs.Serve(ln); err != nil {
 		fmt.Println("server error:", err)
