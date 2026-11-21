@@ -159,7 +159,7 @@ func lsFromDaemonFiles() []*LSInst {
 	return out
 }
 
-var lsExeRe = regexp.MustCompile(`(?i)(?:^|[\\/])language_server(?:_[^/\\\s"']+)?(?:\.exe)?$`)
+var lsExeRe = regexp.MustCompile(`(?i)(?:^|[\\/])(language_server(?:_[^/\\\s"']+)?|agy)(?:\.exe)?$`)
 
 func argValue(args, name string) string {
 	re := regexp.MustCompile(regexp.QuoteMeta(name) + `(?:=|\s+)("([^"]*)"|(\S+))`)
@@ -182,7 +182,7 @@ func listProcesses() []procInfo {
 	out := []procInfo{}
 	if runtime.GOOS == "windows" {
 		cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command",
-			"Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'language_server*' } | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress")
+			"Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'language_server*' -or $_.Name -eq 'agy.exe' } | Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress")
 		hideWindow(cmd)
 		b, err := cmd.Output()
 		if err != nil || len(bytes.TrimSpace(b)) == 0 {
@@ -215,7 +215,7 @@ func listProcesses() []procInfo {
 	for _, l := range strings.Split(string(b), "\n") {
 		l = strings.TrimSpace(l)
 		sp := strings.IndexByte(l, ' ')
-		if sp < 0 || !strings.Contains(l, "language_server") {
+		if sp < 0 || !(strings.Contains(l, "language_server") || strings.Contains(l, "agy")) {
 			continue
 		}
 		pid, err := strconv.Atoi(l[:sp])
@@ -245,16 +245,19 @@ func lsFromProcesses() []*LSInst {
 		}
 		csrf := argValue(p.args, "--csrf_token")
 		if csrf == "" {
-			continue
+			b := strings.ToLower(filepath.Base(strings.TrimSpace(exe)))
+			if b != "agy" && b != "agy.exe" {
+				continue
+			}
+			csrf = "agy_no_csrf"
 		}
+		// Newer builds start with --https_server_port 0 (random port); then the port is
+		// found later from the process's listening sockets.
 		port, _ := strconv.Atoi(argValue(p.args, "--server_port"))
+		if port == 0 {
+			port, _ = strconv.Atoi(argValue(p.args, "--https_server_port"))
+		}
 		alt, _ := strconv.Atoi(argValue(p.args, "--extension_server_port"))
-		if port == 0 {
-			port, alt = alt, 0
-		}
-		if port == 0 {
-			continue
-		}
 		app := filepath.Base(argValue(p.args, "--app_data_dir"))
 		if app == "." || app == "/" {
 			app = ""
@@ -262,6 +265,89 @@ func lsFromProcesses() []*LSInst {
 		out = append(out, &LSInst{PID: p.pid, Port: port, AltPort: alt, CSRF: csrf, App: app, Source: "process"})
 	}
 	return out
+}
+
+// listeningPorts returns TCP ports the process listens on.
+func listeningPorts(pid int) []int {
+	ports := map[int]bool{}
+	add := func(s string) {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			ports[n] = true
+		}
+	}
+	portRe := regexp.MustCompile(`:(\d+)$`)
+	switch runtime.GOOS {
+	case "windows":
+		cmd := exec.Command("netstat", "-ano", "-p", "TCP")
+		hideWindow(cmd)
+		out, _ := cmd.Output()
+		for _, l := range strings.Split(string(out), "\n") {
+			f := strings.Fields(l)
+			if len(f) < 5 || f[len(f)-1] != strconv.Itoa(pid) {
+				continue
+			}
+			// LISTENING rows have a remote address ending in :0 (locale-independent check)
+			if !strings.HasSuffix(f[2], ":0") && !strings.HasSuffix(f[2], ":*") {
+				continue
+			}
+			if m := portRe.FindStringSubmatch(f[1]); m != nil {
+				add(m[1])
+			}
+		}
+	default:
+		if out, err := exec.Command("ss", "-tlnp").Output(); err == nil {
+			re := regexp.MustCompile(`:(\d+)\s`)
+			for _, l := range strings.Split(string(out), "\n") {
+				if strings.Contains(l, fmt.Sprintf("pid=%d,", pid)) {
+					if m := re.FindStringSubmatch(l); m != nil {
+						add(m[1])
+					}
+				}
+			}
+		}
+		if len(ports) == 0 {
+			out, _ := exec.Command("lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-a", "-p", strconv.Itoa(pid)).Output()
+			re := regexp.MustCompile(`:(\d+)\s+\(LISTEN\)`)
+			for _, l := range strings.Split(string(out), "\n") {
+				if m := re.FindStringSubmatch(l); m != nil {
+					add(m[1])
+				}
+			}
+		}
+	}
+	res := []int{}
+	for p := range ports {
+		res = append(res, p)
+	}
+	sort.Ints(res)
+	return res
+}
+
+// findRPCPort probes a process's listening ports for the one that answers GetWorkspaceInfos.
+func (c *LSClient) findRPCPort(x *LSInst) bool {
+	ports := listeningPorts(x.PID)
+	found := make(chan *LSInst, len(ports))
+	var wg sync.WaitGroup
+	for _, p := range ports {
+		if p == x.AltPort {
+			continue
+		}
+		wg.Add(1)
+		go func(p int) {
+			defer wg.Done()
+			t := &LSInst{PID: x.PID, Port: p, CSRF: x.CSRF}
+			if _, err := c.Call(t, "GetWorkspaceInfos", nil, 2*time.Second); err == nil {
+				found <- t
+			}
+		}(p)
+	}
+	wg.Wait()
+	close(found)
+	if t := <-found; t != nil {
+		x.Port, x.Proto = t.Port, t.Proto
+		return true
+	}
+	return false
 }
 
 func (c *LSClient) scan() {
@@ -296,6 +382,12 @@ func (c *LSClient) scan() {
 		wg.Add(1)
 		go func(x *LSInst) {
 			defer wg.Done()
+			if x.Port == 0 && !c.findRPCPort(x) {
+				amu.Lock()
+				errs = append(errs, fmt.Sprintf("pid %d: no port answered (checked %v)", x.PID, listeningPorts(x.PID)))
+				amu.Unlock()
+				return
+			}
 			raw, err := c.Call(x, "GetWorkspaceInfos", nil, 4*time.Second)
 			amu.Lock()
 			defer amu.Unlock()

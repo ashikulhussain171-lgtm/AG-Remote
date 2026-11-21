@@ -26,7 +26,7 @@ import (
 //go:embed pagelib.js
 var pageLibSrc string
 
-const libVersion = "1.3.2"
+const libVersion = "1.3.3"
 
 type Item struct {
 	ID       string `json:"id"`
@@ -156,6 +156,8 @@ type AgentLink struct {
 	screenSubs int
 	screenOn   bool
 	screenSess *CDP
+	lastFrame  atomic.Int64
+	screenGen  atomic.Int64
 }
 
 func NewAgentLink(cfg *Config, ev Events) *AgentLink {
@@ -872,12 +874,15 @@ func (a *AgentLink) startScreencast() error {
 				time.Sleep(90 * time.Millisecond)
 				_, _ = s.Send("Page.screencastFrameAck", map[string]any{"sessionId": id}, 5*time.Second)
 			}(f.SessionID)
+			a.lastFrame.Store(time.Now().UnixMilli())
 			if a.ev.OnFrame != nil {
 				b, _ := json.Marshal(Frame{Data: f.Data, W: f.Metadata.W, H: f.Metadata.H})
 				a.ev.OnFrame(b)
 			}
 		})
 	}
+	gen := a.screenGen.Add(1)
+	go a.screenFallback(e, gen)
 	q := a.cfg.ScreenQuality
 	if q <= 0 || q > 100 {
 		q = 60
@@ -885,20 +890,56 @@ func (a *AgentLink) startScreencast() error {
 	if _, err := e.s.Send("Page.startScreencast", map[string]any{"format": "jpeg", "quality": q, "maxWidth": 1600, "maxHeight": 1600, "everyNthFrame": 1}, 5*time.Second); err != nil {
 		return err
 	}
-	// Screencast only emits on repaint, so push one still frame right away.
-	if raw, err := e.s.Send("Page.captureScreenshot", map[string]any{"format": "jpeg", "quality": 60}, 10*time.Second); err == nil {
-		var shot struct {
-			Data string `json:"data"`
-		}
-		if json.Unmarshal(raw, &shot) == nil {
-			if w, h, err := a.viewport(e); err == nil && a.ev.OnFrame != nil {
-				b, _ := json.Marshal(Frame{Data: shot.Data, W: w, H: h})
-				a.ev.OnFrame(b)
-			}
-		}
-	}
 	a.setState(func(s *State) { s.Screen = true })
 	return nil
+}
+
+func (a *AgentLink) stillFrame(e *tsess) bool {
+	raw, err := e.s.Send("Page.captureScreenshot", map[string]any{"format": "jpeg", "quality": 60}, 6*time.Second)
+	if err != nil {
+		return false
+	}
+	var shot struct {
+		Data string `json:"data"`
+	}
+	if json.Unmarshal(raw, &shot) != nil || shot.Data == "" {
+		return false
+	}
+	w, h, err := a.viewport(e)
+	if err != nil || a.ev.OnFrame == nil {
+		return false
+	}
+	b, _ := json.Marshal(Frame{Data: shot.Data, W: w, H: h})
+	a.lastFrame.Store(time.Now().UnixMilli())
+	a.ev.OnFrame(b)
+	return true
+}
+
+// screenFallback covers windows that stop painting (minimized or covered: Windows
+// occlusion tracking pauses the screencast). It sends a still frame right away, brings
+// the window forward once if nothing arrives, then polls screenshots while the live
+// stream stays silent.
+func (a *AgentLink) screenFallback(e *tsess, gen int64) {
+	start := time.Now()
+	a.stillFrame(e)
+	raised := false
+	for a.screenGen.Load() == gen {
+		a.screenMu.Lock()
+		on := a.screenOn && a.screenSess == e.s
+		a.screenMu.Unlock()
+		if !on {
+			return
+		}
+		idle := time.Now().UnixMilli()-a.lastFrame.Load() > 1500
+		if idle {
+			if !raised && time.Since(start) > 2*time.Second {
+				raised = true
+				_, _ = e.s.Send("Page.bringToFront", nil, 3*time.Second)
+			}
+			a.stillFrame(e)
+		}
+		time.Sleep(time.Second)
+	}
 }
 
 func (a *AgentLink) stopScreencast() {

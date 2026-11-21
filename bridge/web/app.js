@@ -115,6 +115,7 @@ function setStatus(kind, text) {
 
 function onState(st) {
   S.state = st;
+  if (st.lsOk && S.mode === 'mirror' && localStorage.getItem('agrc.mode2') === null) { S.state = st; setMode('native', false); return; }
   const active = (st.targets || []).find((t) => t.id === st.activeId);
   const title = active ? (active.title || 'Antigravity').replace(/\s*[—-]\s*Antigravity.*$/i, '') : 'Antigravity';
   if (S.mode === 'mirror' && S.view === 'chat') $('#winTitle').textContent = st.cdp === 'down' ? 'Antigravity' : title;
@@ -503,8 +504,13 @@ let tapMode = 'tap';
 function startScreenStream() {
   if (S.screenES || document.hidden) return;
   $('#screenEmpty').classList.remove('hidden');
+  $('#screenEmpty').textContent = 'Starting the live screen…';
   const es = new EventSource('/api/screen/stream');
   S.screenES = es;
+  clearTimeout(S.screenHint);
+  S.screenHint = setTimeout(() => {
+    if (!$('#screenEmpty').classList.contains('hidden')) $('#screenEmpty').textContent = 'No picture from Antigravity yet. If its window is minimized on the laptop, restore it — Windows stops drawing minimized windows. Also check Live view works.';
+  }, 7000);
   es.addEventListener('frame', (e) => {
     const f = JSON.parse(e.data);
     $('#screenImg').src = 'data:image/jpeg;base64,' + f.data;

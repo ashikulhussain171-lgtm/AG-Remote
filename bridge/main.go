@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-var version = "1.3.1"
+var version = "1.3.2"
 
 const usage = `AGRemote-Bridge %s — control Antigravity from your phone
 

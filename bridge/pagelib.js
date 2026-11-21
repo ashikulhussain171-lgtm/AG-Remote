@@ -16,7 +16,7 @@ function agrcPageLib(V, SEL) {
       '.monaco-menu-container', '.quick-input-widget', '[data-radix-popper-content-wrapper]',
       '[class*="popover" i]', '[class*="dropdown-menu" i]',
     ].join(',');
-    const APPROVE = /^(accept|approve|allow|run|reject|deny|decline|confirm|continue|proceed|apply|always|yes|no\b|retry|submit|skip|keep|undo|discard|review|open|cancel)/i;
+    const APPROVE = /^(accept|approve|allow|run|reject|deny|decline|confirm|continue|proceed|apply|always|yes|no\b|retry|submit|skip|keep|discard|cancel)\b/i;
     const STOP = /^(stop|cancel|interrupt|abort)\b|stop generat/i;
 
     const rectOf = (el) => el.getBoundingClientRect();

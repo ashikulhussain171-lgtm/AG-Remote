@@ -138,11 +138,13 @@ func closeAntigravity(exe string) {
 }
 
 func launchAntigravity(exe string, port int) error {
-	flag := fmt.Sprintf("--remote-debugging-port=%d", port)
+	// Keep rendering while the window is covered or minimized so the phone's Screen view
+	// and mirror keep updating (Chromium switches, accepted by Electron apps).
+	args := []string{fmt.Sprintf("--remote-debugging-port=%d", port), "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding", "--disable-features=CalculateNativeWinOcclusion"}
 	if runtime.GOOS == "darwin" {
-		return exec.Command("open", "-na", exe, "--args", flag).Run()
+		return exec.Command("open", append([]string{"-na", exe, "--args"}, args...)...).Run()
 	}
-	cmd := exec.Command(exe, flag)
+	cmd := exec.Command(exe, args...)
 	detach(cmd)
 	if err := cmd.Start(); err != nil {
 		return err
