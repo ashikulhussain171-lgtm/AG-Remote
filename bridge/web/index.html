@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#0d0f17">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>AG Remote</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="pair" class="screen hidden">
+    <div class="pair-box">
+      <img src="icon.svg" alt="" class="pair-logo">
+      <h1>Antigravity Remote</h1>
+      <p>Laptop par bridge ki window mein jo 6-digit PIN dikh raha hai, woh daalo.</p>
+      <input id="pin" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••••">
+      <button id="pairBtn" class="primary wide">Connect</button>
+      <div id="pairErr" class="err"></div>
+    </div>
+  </div>
+
+  <div id="app" class="hidden">
+    <header id="top">
+      <span id="dot" class="dot"></span>
+      <div class="top-title"><div id="winTitle">Connecting…</div><div id="subTitle" class="muted small"></div></div>
+      <span id="busy" class="busy hidden"><span class="spin"></span>working</span>
+      <div id="viewSeg" class="seg">
+        <button data-mode="mirror" class="on">Mirror</button><button data-mode="text">Text</button>
+      </div>
+    </header>
+
+    <main>
+      <!-- CHAT -->
+      <section id="v-chat" class="view on">
+        <div id="banner" class="banner hidden"></div>
+        <div id="controls" class="chips"></div>
+        <div id="mirrorWrap">
+          <iframe id="mirror" sandbox="allow-same-origin" title="Agent mirror"></iframe>
+          <div id="textView" class="textview hidden"></div>
+          <button id="toBottom" class="fab hidden" aria-label="Scroll to bottom">↓</button>
+        </div>
+        <div id="pending" class="pending hidden"></div>
+        <div id="composer">
+          <textarea id="msg" rows="1" placeholder="Agent ko message likho…"></textarea>
+          <button id="stopBtn" class="danger hidden" aria-label="Stop">■</button>
+          <button id="sendBtn" class="primary" aria-label="Send">➤</button>
+        </div>
+      </section>
+
+      <!-- SCREEN -->
+      <section id="v-screen" class="view">
+        <div class="toolbar">
+          <div class="seg" id="tapMode">
+            <button data-m="tap" class="on">Tap</button><button data-m="right">Right</button><button data-m="double">Dbl</button><button data-m="scroll">Scroll</button>
+          </div>
+          <div class="seg" id="zoomMode"><button data-z="fit" class="on">Fit</button><button data-z="full">1:1</button></div>
+        </div>
+        <div id="screenWrap"><img id="screenImg" alt=""><div id="screenEmpty" class="muted center">Screen stream start ho raha hai…</div></div>
+        <div class="keys">
+          <div class="row"><input id="typeBox" placeholder="Laptop par type karo…"><button id="typeBtn" class="primary">Type</button></div>
+          <div class="row scroll-x" id="keyRow"></div>
+        </div>
+      </section>
+
+      <!-- HISTORY -->
+      <section id="v-history" class="view">
+        <div id="histList">
+          <div class="toolbar"><input id="histSearch" placeholder="History search…"><button id="histReload">↻</button></div>
+          <div id="histRoots" class="muted small pad"></div>
+          <div id="histItems" class="list"></div>
+        </div>
+        <div id="histDetail" class="hidden">
+          <div class="toolbar"><button id="histBack">←</button><div id="histTitle" class="ellipsis"></div></div>
+          <div class="seg pad" id="histTabs"><button data-t="chat" class="on">Chat</button><button data-t="files">Files</button></div>
+          <div id="histBody" class="scroll"></div>
+        </div>
+      </section>
+
+      <!-- FILES -->
+      <section id="v-files" class="view">
+        <div class="toolbar">
+          <select id="wsSel"></select><button id="wsAdd">+</button>
+          <div class="seg" id="fileTabs"><button data-t="browse" class="on">Files</button><button data-t="git">Git</button></div>
+        </div>
+        <div id="crumbs" class="crumbs"></div>
+        <div id="filesBody" class="scroll"></div>
+        <div id="editor" class="hidden">
+          <div class="toolbar"><button id="edBack">←</button><div id="edName" class="ellipsis"></div><button id="edDiff">Diff</button><button id="edToggle">Edit</button><button id="edSave" class="primary hidden">Save</button></div>
+          <textarea id="edText" spellcheck="false" readonly wrap="off"></textarea>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section id="v-settings" class="view scroll">
+        <div class="card"><h3>Connection</h3><div id="connInfo" class="small"></div></div>
+        <div class="card"><h3>Antigravity windows</h3><div id="targets"></div></div>
+        <div class="card">
+          <h3>Diagnostics</h3>
+          <p class="muted small">Agar chat mirror galat cheez dikhaye ya message na jaye, yahan se sahi input chuno.</p>
+          <button id="inspectBtn">Run diagnostics</button>
+          <div id="inspectOut"></div>
+          <label class="small">Input selector override<input id="selInput" placeholder="auto"></label>
+          <label class="small">Panel selector override<input id="selPanel" placeholder="auto"></label>
+          <div class="row"><button id="selSave" class="primary">Save</button><button id="selClear">Auto</button></div>
+        </div>
+        <div class="card">
+          <h3>Workspaces</h3>
+          <div id="wsList"></div>
+        </div>
+        <div class="card hidden" id="nativeCard">
+          <h3>Phone app</h3>
+          <label class="check"><input type="checkbox" id="bgAlerts"> Background alerts (app band ho tab bhi approval ka notification)</label>
+          <button id="changeLaptop">Laptop badlo</button>
+        </div>
+        <div class="card">
+          <h3>App</h3>
+          <label class="small">Refresh speed: <span id="pollVal"></span> ms<input type="range" id="poll" min="250" max="3000" step="50"></label>
+          <label class="check"><input type="checkbox" id="vibrate" checked> Approval aane par vibrate</label>
+          <label class="check"><input type="checkbox" id="fitWidth" checked> Mirror ko screen width mein fit karo</label>
+          <button id="logout" class="danger">Logout this phone</button>
+        </div>
+      </section>
+    </main>
+
+    <div id="sheet" class="sheet hidden">
+      <div class="sheet-head"><b id="sheetTitle">Menu</b><button id="sheetEsc">Esc</button></div>
+      <iframe id="sheetFrame" sandbox="allow-same-origin" title="Overlay"></iframe>
+      <div class="row"><input id="sheetType" placeholder="Is box mein type karo…"><button id="sheetSend" class="primary">↵</button></div>
+    </div>
+
+    <div id="modal" class="modal hidden"><div class="modal-box"><div class="toolbar"><b id="modalTitle" class="ellipsis"></b><button id="modalClose">✕</button></div><div id="modalBody" class="scroll"></div></div></div>
+    <div id="toast" class="toast hidden"></div>
+
+    <nav id="tabs">
+      <button data-v="chat" class="on"><span>💬</span>Chat</button>
+      <button data-v="screen"><span>🖥️</span>Screen</button>
+      <button data-v="history"><span>🕘</span>History</button>
+      <button data-v="files"><span>📁</span>Code</button>
+      <button data-v="settings"><span>⚙️</span>Settings</button>
+    </nav>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

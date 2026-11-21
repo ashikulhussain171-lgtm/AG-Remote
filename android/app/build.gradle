@@ -1,0 +1,40 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.panther.agremote'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.panther.agremote'
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName '1.1.0'
+    }
+
+    // Fixed key kept in the repo so every build (local or GitHub Actions) has the same signature
+    // and installs as an update over the previous one. Personal sideload use only.
+    signingConfigs {
+        agremote {
+            storeFile file('agremote.keystore')
+            storePassword 'agremote'
+            keyAlias 'agremote'
+            keyPassword 'agremote'
+        }
+    }
+
+    buildTypes {
+        debug { signingConfig signingConfigs.agremote }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.agremote
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

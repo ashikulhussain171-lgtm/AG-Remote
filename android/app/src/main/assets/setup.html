@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AG Remote setup</title>
+<style>
+  :root { --bg:#0d0f17; --panel:#151926; --panel2:#1c2133; --line:#2a3047; --text:#e6e9f2; --muted:#8a93ab; --accent:#7c8cff; --ok:#3ccf8e; --bad:#ff5d6c; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.45 system-ui, Roboto, sans-serif; padding:28px 18px; }
+  .box { max-width:420px; margin:0 auto; }
+  .logo { width:64px; height:64px; display:block; margin:0 auto 10px; }
+  h1 { text-align:center; font-size:22px; margin:0 0 4px; }
+  p.sub { text-align:center; color:var(--muted); margin:0 0 22px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:14px; }
+  .card h3 { margin:0 0 10px; font-size:15px; }
+  input { width:100%; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:10px; padding:12px; font-size:17px; outline:none; }
+  input:focus { border-color:var(--accent); }
+  button { width:100%; margin-top:10px; padding:12px; border-radius:10px; border:1px solid var(--line); background:var(--panel2); color:var(--text); font-size:15px; font-weight:600; }
+  button.primary { background:linear-gradient(135deg,var(--accent),#9a6bff); border:0; color:#fff; }
+  .found button { text-align:left; display:flex; justify-content:space-between; align-items:center; border-color:#2c7a54; background:#17402c; color:#b8f5d7; }
+  .msg { background:#3a1820; border:1px solid #6b2633; color:#ffb3bc; border-radius:10px; padding:10px 12px; margin-bottom:14px; font-size:13.5px; }
+  .muted { color:var(--muted); font-size:13px; }
+  ol { padding-left:20px; color:var(--muted); font-size:13.5px; margin:6px 0 0; }
+  .spin { display:inline-block; width:12px; height:12px; border:2px solid var(--accent); border-right-color:transparent; border-radius:50%; animation:sp .8s linear infinite; vertical-align:-1px; margin-right:6px; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  .hidden { display:none; }
+</style>
+</head>
+<body>
+<div class="box">
+  <svg class="logo" viewBox="0 0 512 512"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c8cff"/><stop offset="1" stop-color="#5ad1ff"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="#151926"/><path d="M256 92 380 400h-62l-26-70h-72l-26 70h-62L256 92zm0 120-22 64h44l-22-64z" fill="url(#g)"/><circle cx="388" cy="132" r="34" fill="#3ccf8e"/></svg>
+  <h1>AG Remote</h1>
+  <p class="sub">Phone se laptop ka Antigravity control karo</p>
+
+  <div id="msg" class="msg hidden"></div>
+
+  <div class="card">
+    <h3>1. Laptop dhoondo</h3>
+    <div class="muted">Laptop par <b>AGRemote-Bridge.exe</b> chalao, phone aur laptop same Wi-Fi par rakho.</div>
+    <button id="scan" class="primary">Wi-Fi par laptop dhoondo</button>
+    <div id="status" class="muted" style="margin-top:8px"></div>
+    <div id="found" class="found"></div>
+  </div>
+
+  <div class="card">
+    <h3>2. Ya address khud daalo</h3>
+    <input id="addr" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="192.168.1.5:8787">
+    <button id="go">Connect</button>
+    <div class="muted" style="margin-top:8px">Address bridge ki window mein likha hota hai. Ghar ke bahar se: Tailscale IP daalo.</div>
+  </div>
+
+  <div class="card">
+    <h3>Connect na ho to</h3>
+    <ol>
+      <li>Laptop par bridge window khuli hai?</li>
+      <li>Windows Firewall ne poocha tha to "Private network" allow kiya?</li>
+      <li>Phone mobile data par nahi, laptop wale Wi-Fi par hai?</li>
+    </ol>
+  </div>
+</div>
+<script>
+  const N = window.AGRCNative;
+  const $ = (s) => document.querySelector(s);
+  const seen = new Set();
+  const hash = decodeURIComponent(location.hash.slice(1) || '');
+  if (hash) { $('#msg').textContent = hash; $('#msg').classList.remove('hidden'); }
+  if (N) $('#addr').value = N.getServer() || '';
+
+  function scan() {
+    if (!N) return;
+    seen.clear();
+    $('#found').innerHTML = '';
+    $('#status').innerHTML = '<span class="spin"></span>Dhoondh raha hoon… (5–10 second)';
+    $('#scan').disabled = true;
+    N.discover();
+  }
+  window.onFound = (r) => {
+    if (seen.has(r.addr)) return;
+    seen.add(r.addr);
+    const b = document.createElement('button');
+    b.innerHTML = '<span></span><span>Connect →</span>';
+    b.firstChild.textContent = '💻 ' + (r.host || 'Laptop') + '  ·  ' + r.addr;
+    b.onclick = () => N.connect(r.addr);
+    $('#found').appendChild(b);
+  };
+  window.onScanDone = (subnets) => {
+    $('#scan').disabled = false;
+    if (seen.size) $('#status').textContent = 'Mil gaya! Apna laptop chuno:';
+    else $('#status').textContent = subnets ? 'Is Wi-Fi (' + subnets + 'x) par bridge nahi mila. Neeche wali checklist dekho, ya address khud daalo.' : 'Phone kisi Wi-Fi se connected nahi lagta.';
+  };
+  $('#scan').onclick = scan;
+  $('#go').onclick = () => { const v = $('#addr').value.trim(); if (v && N) N.connect(v); };
+  $('#addr').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#go').click(); });
+  if (N && !N.getServer()) scan();
+</script>
+</body>
+</html>
