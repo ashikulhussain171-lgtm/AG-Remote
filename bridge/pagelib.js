@@ -198,7 +198,7 @@ function agrcPageLib(V, SEL) {
     };
     const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
-    const cloneSanitized = (root, scroller) => {
+    const cloneSanitized = (root, scroller, inputBox) => {
       const live = [root, ...root.querySelectorAll('*')];
       for (const l of live) if (l.matches(CLICK_SEL)) stamp(l);
       const clone = root.cloneNode(true);
@@ -227,6 +227,7 @@ function agrcPageLib(V, SEL) {
         if (tag === 'TEXTAREA') c.textContent = l.value;
         if (tag === 'INPUT') { c.setAttribute('value', l.value || ''); if (l.checked) c.setAttribute('checked', ''); }
         if (l === scroller || (l.scrollHeight > l.clientHeight + 4 && isScrollable(l))) c.setAttribute('data-agrc-scroll', '');
+        if (inputBox && l === inputBox) c.setAttribute('data-agrc-inputbox', '');
       }
       for (const [c, text, r] of replace) {
         const ph = document.createElement('span');
@@ -288,7 +289,12 @@ function agrcPageLib(V, SEL) {
       if (!A.dirty && !force) return { ok: true, same: true };
       A.dirty = false;
       A.urls = new Set();
-      const html = cloneSanitized(f.panel, f.scroller);
+      // The block around the agent's own text box (the phone has its own composer).
+      let inputBox = f.host;
+      while (inputBox.parentElement && inputBox.parentElement !== f.panel
+        && !(f.scroller && inputBox.parentElement.contains(f.scroller))
+        && textLen(inputBox.parentElement) <= textLen(inputBox) + 200) inputBox = inputBox.parentElement;
+      const html = cloneSanitized(f.panel, f.scroller, inputBox);
       const w = wrappers(f.panel);
       const cs = getComputedStyle(f.panel);
       const vars = {};

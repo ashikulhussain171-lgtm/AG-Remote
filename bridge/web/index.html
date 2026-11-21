@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
-  <meta name="theme-color" content="#0d0f17">
+  <meta name="theme-color" content="#262624">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>AG Remote</title>
@@ -12,136 +12,202 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="pair" class="screen hidden">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></symbol>
+      <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+      <symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none"/></symbol>
+      <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H10l-4 3v-3H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></symbol>
+      <symbol id="i-screen" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4"/></symbol>
+      <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></symbol>
+      <symbol id="i-code" viewBox="0 0 24 24"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></symbol>
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+      <symbol id="i-text" viewBox="0 0 24 24"><path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 7 20z"/><path d="M14 3.5V8h4M10 12h5M10 15.5h5"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+      <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></symbol>
+      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2.1-5M19 4v4h-4"/></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 7a1 1 0 0 1 1-1H10l2 2h7.5a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z"/></symbol>
+      <symbol id="i-file" viewBox="0 0 24 24"><path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 7 20z"/><path d="M14 3.5V8h4"/></symbol>
+      <symbol id="i-branch" viewBox="0 0 24 24"><circle cx="7" cy="6" r="2"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="8" r="2"/><path d="M7 8v8M17 10c0 4-10 2-10 6"/></symbol>
+      <symbol id="i-tool" viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 0 5 5L12 19a2.1 2.1 0 0 1-3-3l7.5-7.5a4 4 0 0 0-2-2z"/></symbol>
+    </defs>
+  </svg>
+
+  <!-- PAIRING -->
+  <div id="pair" class="pair hidden">
     <div class="pair-box">
       <img src="icon.svg" alt="" class="pair-logo">
-      <h1>Antigravity Remote</h1>
-      <p>Laptop par bridge ki window mein jo 6-digit PIN dikh raha hai, woh daalo.</p>
-      <input id="pin" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="••••••">
-      <button id="pairBtn" class="primary wide">Connect</button>
+      <h1 class="serif">Connect to your laptop</h1>
+      <p class="muted">Enter the 6-digit PIN shown in the AG Remote bridge window on your computer.</p>
+      <input id="pin" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" aria-label="PIN">
+      <button id="pairBtn" class="btn primary wide">Connect</button>
       <div id="pairErr" class="err"></div>
     </div>
   </div>
 
   <div id="app" class="hidden">
-    <header id="top">
-      <span id="dot" class="dot"></span>
-      <div class="top-title"><div id="winTitle">Connecting…</div><div id="subTitle" class="muted small"></div></div>
-      <span id="busy" class="busy hidden"><span class="spin"></span>working</span>
-      <div id="viewSeg" class="seg">
-        <button data-mode="mirror" class="on">Mirror</button><button data-mode="text">Text</button>
+    <!-- DRAWER -->
+    <aside id="drawer" aria-label="Menu">
+      <div class="drawer-head">
+        <span class="brand serif">AG Remote</span>
+        <button class="icon" id="drawerClose" aria-label="Close menu"><svg><use href="#i-x"/></svg></button>
       </div>
+      <button id="newChat" class="new-chat"><span class="plus"><svg><use href="#i-plus"/></svg></span>New chat</button>
+      <nav id="nav">
+        <button data-v="chat"><svg><use href="#i-chat"/></svg>Chat</button>
+        <button data-v="screen"><svg><use href="#i-screen"/></svg>Screen</button>
+        <button data-v="history"><svg><use href="#i-clock"/></svg>History</button>
+        <button data-v="files"><svg><use href="#i-code"/></svg>Code</button>
+        <button data-v="settings"><svg><use href="#i-gear"/></svg>Settings</button>
+      </nav>
+      <div class="drawer-label">Recents</div>
+      <div id="recents" class="recents"></div>
+      <div class="drawer-foot"><span id="dot2" class="dot"></span><span id="hostName" class="ellipsis">Laptop</span></div>
+    </aside>
+    <div id="scrim" class="hidden"></div>
+
+    <header id="top">
+      <button class="icon" id="menuBtn" aria-label="Open menu"><svg><use href="#i-menu"/></svg></button>
+      <div class="top-title">
+        <div id="winTitle" class="ellipsis">Connecting…</div>
+        <div id="subTitle" class="ellipsis"><span id="dot" class="dot"></span><span id="subText">Connecting</span></div>
+      </div>
+      <button class="icon" id="viewBtn" aria-label="Switch view"><svg><use href="#i-text"/></svg></button>
     </header>
 
     <main>
       <!-- CHAT -->
-      <section id="v-chat" class="view on">
-        <div id="banner" class="banner hidden"></div>
-        <div id="controls" class="chips"></div>
+      <section id="v-chat" class="view">
+        <div id="banner" class="notice hidden"></div>
         <div id="mirrorWrap">
-          <iframe id="mirror" sandbox="allow-same-origin" title="Agent mirror"></iframe>
+          <iframe id="mirror" sandbox="allow-same-origin" title="Antigravity agent"></iframe>
           <div id="textView" class="textview hidden"></div>
-          <button id="toBottom" class="fab hidden" aria-label="Scroll to bottom">↓</button>
+          <button id="toBottom" class="fab hidden" aria-label="Scroll to bottom"><svg><use href="#i-down"/></svg></button>
         </div>
-        <div id="pending" class="pending hidden"></div>
-        <div id="composer">
-          <textarea id="msg" rows="1" placeholder="Agent ko message likho…"></textarea>
-          <button id="stopBtn" class="danger hidden" aria-label="Stop">■</button>
-          <button id="sendBtn" class="primary" aria-label="Send">➤</button>
+        <div id="dock">
+          <div id="pending" class="approval hidden">
+            <div class="approval-title"><span class="pulse"></span>Antigravity is waiting for your approval</div>
+            <div id="pendingBtns" class="approval-btns"></div>
+          </div>
+          <div class="composer">
+            <textarea id="msg" rows="1" placeholder="Message Antigravity…"></textarea>
+            <div class="composer-bar">
+              <button class="icon ring" id="moreBtn" aria-label="Panel controls"><svg><use href="#i-plus"/></svg></button>
+              <div id="quickCtl" class="quick"></div>
+              <span class="spacer"></span>
+              <button id="stopBtn" class="send stop hidden" aria-label="Stop"><svg><use href="#i-stop"/></svg></button>
+              <button id="sendBtn" class="send" aria-label="Send"><svg><use href="#i-up"/></svg></button>
+            </div>
+          </div>
         </div>
       </section>
 
       <!-- SCREEN -->
       <section id="v-screen" class="view">
-        <div class="toolbar">
-          <div class="seg" id="tapMode">
-            <button data-m="tap" class="on">Tap</button><button data-m="right">Right</button><button data-m="double">Dbl</button><button data-m="scroll">Scroll</button>
-          </div>
+        <div class="bar">
+          <div class="seg" id="tapMode"><button data-m="tap" class="on">Tap</button><button data-m="right">Right</button><button data-m="double">Double</button><button data-m="scroll">Scroll</button></div>
+          <span class="spacer"></span>
           <div class="seg" id="zoomMode"><button data-z="fit" class="on">Fit</button><button data-z="full">1:1</button></div>
         </div>
-        <div id="screenWrap"><img id="screenImg" alt=""><div id="screenEmpty" class="muted center">Screen stream start ho raha hai…</div></div>
+        <div id="screenWrap"><img id="screenImg" alt=""><div id="screenEmpty" class="empty">Starting the live screen…</div></div>
         <div class="keys">
-          <div class="row"><input id="typeBox" placeholder="Laptop par type karo…"><button id="typeBtn" class="primary">Type</button></div>
+          <div class="row"><input id="typeBox" placeholder="Type on the laptop…"><button id="typeBtn" class="btn primary">Type</button></div>
           <div class="row scroll-x" id="keyRow"></div>
         </div>
       </section>
 
       <!-- HISTORY -->
       <section id="v-history" class="view">
-        <div id="histList">
-          <div class="toolbar"><input id="histSearch" placeholder="History search…"><button id="histReload">↻</button></div>
+        <div id="histList" class="col">
+          <div class="page-head"><h2 class="serif">History</h2></div>
+          <div class="search"><svg><use href="#i-search"/></svg><input id="histSearch" placeholder="Search conversations"><button class="icon" id="histReload" aria-label="Reload"><svg><use href="#i-refresh"/></svg></button></div>
           <div id="histRoots" class="muted small pad"></div>
           <div id="histItems" class="list"></div>
         </div>
-        <div id="histDetail" class="hidden">
-          <div class="toolbar"><button id="histBack">←</button><div id="histTitle" class="ellipsis"></div></div>
-          <div class="seg pad" id="histTabs"><button data-t="chat" class="on">Chat</button><button data-t="files">Files</button></div>
+        <div id="histDetail" class="col hidden">
+          <div class="bar"><button class="icon" id="histBack" aria-label="Back"><svg><use href="#i-back"/></svg></button><div id="histTitle" class="ellipsis bar-title"></div>
+            <div class="seg" id="histTabs"><button data-t="chat" class="on">Chat</button><button data-t="files">Files</button></div></div>
           <div id="histBody" class="scroll"></div>
         </div>
       </section>
 
-      <!-- FILES -->
+      <!-- CODE -->
       <section id="v-files" class="view">
-        <div class="toolbar">
-          <select id="wsSel"></select><button id="wsAdd">+</button>
-          <div class="seg" id="fileTabs"><button data-t="browse" class="on">Files</button><button data-t="git">Git</button></div>
+        <div class="bar">
+          <select id="wsSel" aria-label="Workspace"></select>
+          <button class="icon ring" id="wsAdd" aria-label="Add workspace"><svg><use href="#i-plus"/></svg></button>
+          <div class="seg" id="fileTabs"><button data-t="browse" class="on">Files</button><button data-t="git">Changes</button></div>
         </div>
         <div id="crumbs" class="crumbs"></div>
-        <div id="filesBody" class="scroll"></div>
+        <div id="filesBody" class="scroll list"></div>
         <div id="editor" class="hidden">
-          <div class="toolbar"><button id="edBack">←</button><div id="edName" class="ellipsis"></div><button id="edDiff">Diff</button><button id="edToggle">Edit</button><button id="edSave" class="primary hidden">Save</button></div>
+          <div class="bar"><button class="icon" id="edBack" aria-label="Back"><svg><use href="#i-back"/></svg></button><div id="edName" class="ellipsis bar-title"></div>
+            <button id="edDiff" class="btn ghost">Diff</button><button id="edToggle" class="btn ghost">Edit</button><button id="edSave" class="btn primary hidden">Save</button></div>
           <textarea id="edText" spellcheck="false" readonly wrap="off"></textarea>
         </div>
       </section>
 
       <!-- SETTINGS -->
       <section id="v-settings" class="view scroll">
+        <div class="page-head"><h2 class="serif">Settings</h2></div>
         <div class="card"><h3>Connection</h3><div id="connInfo" class="small"></div></div>
-        <div class="card"><h3>Antigravity windows</h3><div id="targets"></div></div>
         <div class="card">
-          <h3>Diagnostics</h3>
-          <p class="muted small">Agar chat mirror galat cheez dikhaye ya message na jaye, yahan se sahi input chuno.</p>
-          <button id="inspectBtn">Run diagnostics</button>
-          <div id="inspectOut"></div>
-          <label class="small">Input selector override<input id="selInput" placeholder="auto"></label>
-          <label class="small">Panel selector override<input id="selPanel" placeholder="auto"></label>
-          <div class="row"><button id="selSave" class="primary">Save</button><button id="selClear">Auto</button></div>
+          <h3>Appearance</h3>
+          <div class="field"><span>Theme</span><div class="seg" id="themeSeg"><button data-v="auto">Auto</button><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div>
+          <div class="field"><span>Chat style</span><div class="seg" id="styleSeg"><button data-v="clean">Clean</button><button data-v="original">Original</button></div></div>
+          <div class="field"><span>Response font</span><div class="seg" id="fontSeg"><button data-v="serif">Serif</button><button data-v="sans">Sans</button></div></div>
+          <label class="check"><input type="checkbox" id="fitWidth"> Fit chat to screen width</label>
         </div>
+        <div class="card hidden" id="nativeCard">
+          <h3>Phone app</h3>
+          <label class="check"><input type="checkbox" id="bgAlerts"> Background alerts — notify me about approvals even when the app is closed</label>
+          <button id="changeLaptop" class="btn">Change laptop</button>
+        </div>
+        <div class="card">
+          <h3>Notifications</h3>
+          <label class="check"><input type="checkbox" id="vibrate"> Vibrate when Antigravity needs approval</label>
+          <label class="field col-field"><span>Refresh speed <b id="pollVal"></b> ms</span><input type="range" id="poll" min="250" max="3000" step="50"></label>
+        </div>
+        <div class="card"><h3>Antigravity windows</h3><div id="targets"></div></div>
         <div class="card">
           <h3>Workspaces</h3>
           <div id="wsList"></div>
         </div>
-        <div class="card hidden" id="nativeCard">
-          <h3>Phone app</h3>
-          <label class="check"><input type="checkbox" id="bgAlerts"> Background alerts (app band ho tab bhi approval ka notification)</label>
-          <button id="changeLaptop">Laptop badlo</button>
-        </div>
         <div class="card">
-          <h3>App</h3>
-          <label class="small">Refresh speed: <span id="pollVal"></span> ms<input type="range" id="poll" min="250" max="3000" step="50"></label>
-          <label class="check"><input type="checkbox" id="vibrate" checked> Approval aane par vibrate</label>
-          <label class="check"><input type="checkbox" id="fitWidth" checked> Mirror ko screen width mein fit karo</label>
-          <button id="logout" class="danger">Logout this phone</button>
+          <h3>Diagnostics</h3>
+          <p class="muted small">If the chat shows the wrong part of Antigravity or messages don't send, run diagnostics and pick the right input box.</p>
+          <button id="inspectBtn" class="btn">Run diagnostics</button>
+          <div id="inspectOut"></div>
+          <label class="field col-field"><span>Input selector override</span><input id="selInput" placeholder="auto"></label>
+          <label class="field col-field"><span>Panel selector override</span><input id="selPanel" placeholder="auto"></label>
+          <div class="row"><button id="selSave" class="btn primary">Save</button><button id="selClear" class="btn">Reset to auto</button></div>
         </div>
+        <div class="card"><button id="logout" class="btn danger wide">Log out this phone</button></div>
+        <div class="muted small center" id="versionLine"></div>
       </section>
     </main>
 
+    <!-- overlay menus mirrored from Antigravity -->
     <div id="sheet" class="sheet hidden">
-      <div class="sheet-head"><b id="sheetTitle">Menu</b><button id="sheetEsc">Esc</button></div>
-      <iframe id="sheetFrame" sandbox="allow-same-origin" title="Overlay"></iframe>
-      <div class="row"><input id="sheetType" placeholder="Is box mein type karo…"><button id="sheetSend" class="primary">↵</button></div>
+      <div class="sheet-grip"></div>
+      <div class="sheet-head"><b id="sheetTitle">Menu</b><button id="sheetEsc" class="btn ghost">Close</button></div>
+      <iframe id="sheetFrame" sandbox="allow-same-origin" title="Menu"></iframe>
+      <div class="row pad"><input id="sheetType" placeholder="Type into this box…"><button id="sheetSend" class="btn primary">Enter</button></div>
     </div>
 
-    <div id="modal" class="modal hidden"><div class="modal-box"><div class="toolbar"><b id="modalTitle" class="ellipsis"></b><button id="modalClose">✕</button></div><div id="modalBody" class="scroll"></div></div></div>
-    <div id="toast" class="toast hidden"></div>
+    <!-- all detected panel controls -->
+    <div id="actions" class="sheet short hidden">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head"><b>Antigravity controls</b><button id="actionsClose" class="btn ghost">Done</button></div>
+      <div id="actionsList" class="list scroll"></div>
+    </div>
 
-    <nav id="tabs">
-      <button data-v="chat" class="on"><span>💬</span>Chat</button>
-      <button data-v="screen"><span>🖥️</span>Screen</button>
-      <button data-v="history"><span>🕘</span>History</button>
-      <button data-v="files"><span>📁</span>Code</button>
-      <button data-v="settings"><span>⚙️</span>Settings</button>
-    </nav>
+    <div id="modal" class="modal hidden"><div class="modal-box"><div class="bar"><b id="modalTitle" class="ellipsis bar-title"></b><button class="icon" id="modalClose" aria-label="Close"><svg><use href="#i-x"/></svg></button></div><div id="modalBody" class="scroll"></div></div></div>
+    <div id="toast" class="toast hidden"></div>
   </div>
   <script src="app.js"></script>
 </body>

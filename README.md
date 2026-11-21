@@ -39,14 +39,14 @@ Android Studio se bhi khul jata hai: `android/` folder open karo → Build → B
 
 APK hamesha `android/app/agremote.keystore` se sign hota hai, isliye har nayi build purani app ke upar update ki tarah install hogi. Yeh key sirf personal use ke liye hai — repo private rakho.
 
-## Tabs
+## Screens (left menu ☰ se)
 | Tab | Kya karta hai |
 |---|---|
-| **Chat** | Agent panel ka live mirror. Message bhejo, ■ Stop. Upar chips = panel ke buttons (New chat, History, model, mode). Accept/Reject/Run neeche bade buttons + vibrate. Mirror mein tap = laptop par real click. Menu khule to neeche sheet. `Text` mode = plain text. |
+| **Chat** | Agent panel ka live mirror (Clean style = warm theme + serif font, ya Original). Neeche composer: message, ■ Stop, model chip, + menu mein panel ke saare buttons. Approval card par Accept/Reject + vibrate. Mirror mein tap = laptop par real click. Upar right icon = plain text view. |
 | **Screen** | Antigravity window ki live video. Tap/Right/Double/Scroll, typing, shortcuts (Ctrl/⌘+S, Ctrl+Shift+P, Esc…). Jo mirror mein na dikhe, yahan se control karo. |
 | **History** | `~/.gemini/antigravity*/brain/...` ki conversations: title, transcript, artifacts (task.md, plan, walkthrough, screenshots). |
 | **Code** | Workspace files browse/edit/save (conflict check ke saath), git status + coloured diff. |
-| **Settings** | Window chunna, Diagnostics, selector override, refresh speed, background alerts, laptop badlo, logout. |
+| **Settings** | Theme (Auto/Light/Dark), chat style, font, window chunna, Diagnostics, refresh speed, background alerts, laptop badlo, logout. |
 
 ## Problem ho to
 - **"Debug port band hai"** → Antigravity flag ke bina chal raha hai. Use band karke exe dobara chalao. Check: laptop browser mein `http://127.0.0.1:9000/json/version` khulna chahiye.

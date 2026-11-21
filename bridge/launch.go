@@ -160,21 +160,21 @@ func ensureAntigravity(c *Config) {
 	running := runningAntigravity()
 	exe := findAntigravity(c, running)
 	if exe == "" {
-		fmt.Println("  ✖ Antigravity install nahi mila. Path do:  AGRemote-Bridge --ag-exe \"C:\\...\\Antigravity.exe\"")
-		fmt.Printf("    Ya Antigravity khud is flag ke saath kholo: --remote-debugging-port=%d\n", c.CDPPort)
+		fmt.Println("  ✖ Antigravity was not found. Give the path:  AGRemote-Bridge --ag-exe \"C:\\...\\Antigravity.exe\"")
+		fmt.Printf("    Or start Antigravity yourself with: --remote-debugging-port=%d\n", c.CDPPort)
 		return
 	}
 	if c.AgExe != exe {
 		_ = c.Update(func(c *Config) { c.AgExe = exe })
 	}
 	if len(running) > 0 {
-		fmt.Println("  ! Antigravity chal raha hai, lekin debug port ke bina.")
+		fmt.Println("  ! Antigravity is running without the debug port.")
 		if !interactive() {
-			fmt.Println("    Use poori tarah band karo; bridge intezaar karega aur khulte hi connect karega.")
+			fmt.Println("    Close it completely; the bridge will wait and connect when it reopens with the port.")
 			return
 		}
-		if a := ask("    Use band karke debug port ke saath dobara kholun? Unsaved kaam save kar lo. [y/N]: "); a != "y" && a != "yes" && a != "haan" && a != "ha" {
-			fmt.Println("    Theek hai. Antigravity khud band karke dobara is exe ko chalao.")
+		if a := ask("    Restart Antigravity with the debug port now? Save your work first. [y/N]: "); a != "y" && a != "yes" {
+			fmt.Println("    OK. Close Antigravity yourself and run this again.")
 			return
 		}
 		closeAntigravity(exe)
@@ -183,7 +183,7 @@ func ensureAntigravity(c *Config) {
 			time.Sleep(time.Second)
 		}
 		for len(runningAntigravity()) > 0 {
-			fmt.Println("    Antigravity abhi bhi khula hai (koi dialog?). Use band karo, main intezaar kar raha hoon…")
+			fmt.Println("    Antigravity is still open (a dialog waiting?). Close it — waiting…")
 			time.Sleep(3 * time.Second)
 		}
 	}
@@ -199,5 +199,5 @@ func ensureAntigravity(c *Config) {
 		}
 		time.Sleep(time.Second)
 	}
-	fmt.Println("  ! Debug port abhi tak nahi khula. Bridge peeche try karta rahega.")
+	fmt.Println("  ! The debug port is not open yet. The bridge keeps retrying in the background.")
 }

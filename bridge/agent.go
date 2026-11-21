@@ -26,7 +26,7 @@ import (
 //go:embed pagelib.js
 var pageLibSrc string
 
-const libVersion = "1.1.0"
+const libVersion = "1.2.0"
 
 type Item struct {
 	ID       string `json:"id"`
@@ -861,7 +861,11 @@ func (a *AgentLink) startScreencast() error {
 			if json.Unmarshal(p, &f) != nil {
 				return
 			}
-			go s.Send("Page.screencastFrameAck", map[string]any{"sessionId": f.SessionID}, 5*time.Second)
+			// Delayed ack caps the stream near 10 fps so a phone on Wi-Fi is not flooded.
+			go func(id int) {
+				time.Sleep(90 * time.Millisecond)
+				_, _ = s.Send("Page.screencastFrameAck", map[string]any{"sessionId": id}, 5*time.Second)
+			}(f.SessionID)
 			if a.ev.OnFrame != nil {
 				b, _ := json.Marshal(Frame{Data: f.Data, W: f.Metadata.W, H: f.Metadata.H})
 				a.ev.OnFrame(b)

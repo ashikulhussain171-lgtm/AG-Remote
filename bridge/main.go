@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-var version = "1.1.0"
+var version = "1.2.0"
 
 const usage = `AGRemote-Bridge %s — control Antigravity from your phone
 
@@ -32,7 +32,7 @@ Usage: AGRemote-Bridge [options]
 
 func pauseExit(code int) {
 	if interactive() {
-		fmt.Print("\nEnter dabao band karne ke liye…")
+		fmt.Print("\nPress Enter to close…")
 		_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
 	}
 	os.Exit(code)
@@ -95,7 +95,7 @@ func main() {
 	srv := NewServer(cfg)
 	ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", cfg.Bind, cfg.Port))
 	if err != nil {
-		fmt.Printf("\n  ✖ Port %d par start nahi hua: %v\n  Shayad bridge pehle se chal raha hai. Ya --port 8788 try karo.\n", cfg.Port, err)
+		fmt.Printf("\n  ✖ Could not start on port %d: %v\n  The bridge may already be running. Or try --port 8788.\n", cfg.Port, err)
 		pauseExit(1)
 	}
 	ips := lanIPs()
@@ -103,16 +103,16 @@ func main() {
 		ips = []string{"127.0.0.1"}
 	}
 	fmt.Println("\n  ───────────────────────────────────────────────")
-	fmt.Println("  Phone app mein yeh address daalo (same Wi-Fi):")
+	fmt.Println("  Enter this address in the phone app (same Wi-Fi):")
 	for _, ip := range ips {
 		fmt.Printf("     %s:%d\n", ip, cfg.Port)
 	}
 	fmt.Printf("\n  Pairing PIN:  %s\n", cfg.Pin)
 	fmt.Println("  ───────────────────────────────────────────────")
 	if len(cfg.WorkspacesCopy()) == 0 {
-		fmt.Println("  Tip: Code tab ke liye phone app ke Code tab mein + dabake project folder add karo.")
+		fmt.Println("  Tip: add a project folder from the Code screen in the phone app (tap +).")
 	}
-	fmt.Println("  Yeh window khuli rakho. Band karne par phone control ruk jayega.")
+	fmt.Println("  Keep this window open. Closing it stops phone control.")
 	fmt.Println()
 
 	srv.link.Start()

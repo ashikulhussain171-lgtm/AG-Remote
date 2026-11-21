@@ -53,7 +53,7 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
 
         web = new WebView(this);
-        web.setBackgroundColor(0xFF0D0F17);
+        web.setBackgroundColor(0xFF262624);
         setContentView(web);
 
         WebSettings s = web.getSettings();
@@ -88,8 +88,8 @@ public class MainActivity extends Activity {
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame() && !"file".equals(request.getUrl().getScheme())) {
-                    showSetup("Laptop se connect nahi hua (" + error.getDescription()
-                            + "). Laptop par AGRemote-Bridge chal raha hai? Dono same Wi-Fi par hain?");
+                    showSetup("Couldn't reach your laptop (" + error.getDescription()
+                            + "). Is the AG Remote bridge running, and are both devices on the same Wi-Fi?");
                 }
             }
         });

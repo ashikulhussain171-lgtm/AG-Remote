@@ -54,7 +54,7 @@ public class AlertService extends Service {
         Notification n = builder(CH_RUN)
                 .setSmallIcon(R.drawable.ic_stat)
                 .setContentTitle("AG Remote")
-                .setContentText("Antigravity approvals par nazar rakh raha hai")
+                .setContentText("Watching Antigravity for approvals")
                 .setOngoing(true)
                 .setContentIntent(openApp())
                 .build();
@@ -157,9 +157,9 @@ public class AlertService extends Service {
                                     if (labels.length() > 0) labels.append(" / ");
                                     labels.append(it.optString("label"));
                                 }
-                                alert("Antigravity: approval chahiye", labels.toString());
+                                alert("Antigravity needs your approval", labels.toString());
                             } else if (prevBusy && !busy && n == 0) {
-                                alert("Antigravity", "Agent ka kaam khatam ho gaya.");
+                                alert("Antigravity", "The agent finished working.");
                             }
                         }
                         first = false;

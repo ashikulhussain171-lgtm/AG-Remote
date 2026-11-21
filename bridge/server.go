@@ -30,12 +30,17 @@ type sseMsg struct {
 }
 
 type sseClient struct {
-	id     string
-	ch     chan sseMsg
-	kill   chan struct{}
-	once   sync.Once
-	screen bool
-	lite   bool
+	id   string
+	ch   chan sseMsg
+	kill chan struct{}
+	once sync.Once
+	lite bool
+}
+
+// frameClient receives screen frames on its own stream so heavy JPEG frames never
+// delay chat/state updates. Capacity 1 + replace-on-full = always the newest frame.
+type frameClient struct {
+	ch chan []byte
 }
 
 func (c *sseClient) drop() { c.once.Do(func() { close(c.kill) }) }
@@ -46,6 +51,7 @@ type Server struct {
 
 	cmu     sync.Mutex
 	clients map[string]*sseClient
+	frames  map[*frameClient]bool
 
 	fmu         sync.Mutex
 	fails       map[string]*failRec
@@ -58,13 +64,13 @@ type failRec struct {
 }
 
 func NewServer(cfg *Config) *Server {
-	s := &Server{cfg: cfg, clients: map[string]*sseClient{}, fails: map[string]*failRec{}}
+	s := &Server{cfg: cfg, clients: map[string]*sseClient{}, frames: map[*frameClient]bool{}, fails: map[string]*failRec{}}
 	s.link = NewAgentLink(cfg, Events{
 		OnState:    func(b []byte) { s.broadcast("state", b, func(c *sseClient) bool { return true }) },
 		OnSnap:     func(b []byte) { s.broadcast("snap", b, notLite) },
 		OnCSS:      func(h string) { s.broadcast("css", []byte(jsJSON(map[string]string{"hash": h})), notLite) },
 		OnOverlays: func(b []byte) { s.broadcast("overlays", b, notLite) },
-		OnFrame:    func(b []byte) { s.broadcast("frame", b, func(c *sseClient) bool { return c.screen && !c.lite }) },
+		OnFrame:    s.broadcastFrame,
 	})
 	return s
 }
@@ -80,9 +86,26 @@ func (s *Server) broadcast(event string, data []byte, filter func(*sseClient) bo
 		}
 		select {
 		case c.ch <- sseMsg{event, data}:
+		default: // a slow phone missed a real update: make it reconnect for a full resync
+			c.drop()
+		}
+	}
+}
+
+func (s *Server) broadcastFrame(b []byte) {
+	s.cmu.Lock()
+	defer s.cmu.Unlock()
+	for fc := range s.frames {
+		select {
+		case fc.ch <- b:
 		default:
-			if event != "frame" { // a slow phone missed a real update: make it reconnect for a full resync
-				c.drop()
+			select { // drop the stale frame, keep the newest
+			case <-fc.ch:
+			default:
+			}
+			select {
+			case fc.ch <- b:
+			default:
 			}
 		}
 	}
@@ -260,6 +283,9 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		}
 	case "/api/events":
 		s.events(w, r)
+		return
+	case "/api/screen/stream":
+		s.screenStream(w, r)
 		return
 	case "/api/state":
 		writeJSON(w, 200, s.link.StateJSON())
@@ -445,12 +471,8 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 		s.cmu.Lock()
 		delete(s.clients, c.id)
 		n := len(s.clients)
-		screen := c.screen
 		s.cmu.Unlock()
 		s.link.clients.Store(int32(n))
-		if screen {
-			go s.link.ScreenSubscribe(-1)
-		}
 	}()
 	write("hello", []byte(jsJSON(map[string]string{"cid": c.id})))
 	write("state", s.link.StateJSON())
@@ -478,6 +500,55 @@ func (s *Server) events(w http.ResponseWriter, r *http.Request) {
 			fl.Flush()
 		case <-c.kill:
 			return
+		case <-r.Context().Done():
+			return
+		}
+	}
+}
+
+func (s *Server) screenStream(w http.ResponseWriter, r *http.Request) {
+	fl, ok := w.(http.Flusher)
+	if !ok {
+		writeJSON(w, 500, failRes("streaming unsupported"))
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Accel-Buffering", "no")
+	w.WriteHeader(200)
+	fc := &frameClient{ch: make(chan []byte, 1)}
+	s.cmu.Lock()
+	s.frames[fc] = true
+	s.cmu.Unlock()
+	go s.link.ScreenSubscribe(1)
+	defer func() {
+		s.cmu.Lock()
+		delete(s.frames, fc)
+		s.cmu.Unlock()
+		go s.link.ScreenSubscribe(-1)
+	}()
+	_, _ = io.WriteString(w, ": open\n\n")
+	fl.Flush()
+	ping := time.NewTicker(15 * time.Second)
+	defer ping.Stop()
+	for {
+		select {
+		case b := <-fc.ch:
+			if _, err := io.WriteString(w, "event: frame\ndata: "); err != nil {
+				return
+			}
+			if _, err := w.Write(b); err != nil {
+				return
+			}
+			if _, err := io.WriteString(w, "\n\n"); err != nil {
+				return
+			}
+			fl.Flush()
+		case <-ping.C:
+			if _, err := io.WriteString(w, ": ping\n\n"); err != nil {
+				return
+			}
+			fl.Flush()
 		case <-r.Context().Done():
 			return
 		}
@@ -566,31 +637,6 @@ func (s *Server) post(w http.ResponseWriter, r *http.Request, p string) {
 		_ = readJSON(r, 4096, &b)
 		if b.PollMs >= 250 && b.PollMs <= 5000 {
 			_ = s.cfg.Update(func(c *Config) { c.PollMs = b.PollMs })
-		}
-		writeJSON(w, 200, okRes())
-	case "/api/screen":
-		var b struct {
-			CID string `json:"cid"`
-			On  bool   `json:"on"`
-		}
-		_ = readJSON(r, 4096, &b)
-		s.cmu.Lock()
-		c := s.clients[b.CID]
-		changed := c != nil && c.screen != b.On
-		if changed {
-			c.screen = b.On
-		}
-		s.cmu.Unlock()
-		if c == nil {
-			writeJSON(w, 400, failRes("unknown client"))
-			return
-		}
-		if changed {
-			d := -1
-			if b.On {
-				d = 1
-			}
-			s.link.ScreenSubscribe(d)
 		}
 		writeJSON(w, 200, okRes())
 	case "/api/screen/tap":
