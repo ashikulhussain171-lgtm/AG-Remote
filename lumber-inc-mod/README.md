@@ -59,6 +59,7 @@ is on, so with every switch off the game runs unmodified.
 | | `0x2EEFF8C` | `SupervisorV2.SupervisorCardResource.DoRemoveAmount` → `ret` |
 | Max Level (1 tap) | `0x4183BB0` | `Upgradable<object>.Upgrade`: `cmp w22, w0` → `subs w22, w22, w0` |
 | | `0x4183C34` | `add w8, w8, #1` → `sub w8, w8, w22` (index jumps to the provider's max) |
+| | `0x4183C2C` | `mov w1, #1` → `mov w1, wzr`: `UpdateCachedLevels(isUpgrade: false)` rebuilds current/next from the new index (with `true` it promoted the cached old+1 level, so the jump only showed as +1) |
 | No Ads | `0x2A8F79C` | `Mediation.get_AdFree` → true (rewarded video rewards without an ad, via `InterceptRv`) |
 | | `0x355D994` | `Screw.Idle.AdsFreeManager.get_IsAdFree` → true |
 | | `0x34C1E4C` | `Screw.Store.get_ShouldShowAds` → false (interstitial + banner gates) |

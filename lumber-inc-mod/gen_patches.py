@@ -26,6 +26,10 @@ def groups():
             #   add w8, w8, #1  ->  sub w8, w8, w22  (new index = cur - (cur - max) = max)
             ("Upgradable.Upgrade cmp", 0x4183BB0, asm("subs w22, w22, w0", 0x4183BB0)),
             ("Upgradable.Upgrade +1", 0x4183C34, asm("sub w8, w8, w22", 0x4183C34)),
+            #   UpdateCachedLevels(isUpgrade: true) promotes the cached next level (old index + 1) to current,
+            #   so the jump showed as +1. isUpgrade: false re-provides current/next from the new index
+            #   (same call SetCurrentLevel makes).   mov w1, #1  ->  mov w1, wzr
+            ("Upgradable.Upgrade isUpgrade", 0x4183C2C, asm("mov w1, wzr", 0x4183C2C)),
         ],
         "NO_ADS": [
             ("Mediation.get_AdFree", 0x2A8F79C, asm("mov w0, #1; ret", 0x2A8F79C)),

@@ -26,6 +26,7 @@ final class Patches {
         new Patch(Group.FREE_SPEND, "SupervisorCardResource.DoRemoveAmount", 0x2EEFF8CL, "e923bd6d", "c0035fd6"),
         new Patch(Group.MAX_LEVEL, "Upgradable.Upgrade cmp", 0x4183BB0L, "df02006b", "d602006b"),
         new Patch(Group.MAX_LEVEL, "Upgradable.Upgrade +1", 0x4183C34L, "08050011", "0801164b"),
+        new Patch(Group.MAX_LEVEL, "Upgradable.Upgrade isUpgrade", 0x4183C2CL, "21008052", "e1031f2a"),
         new Patch(Group.NO_ADS, "Mediation.get_AdFree", 0x2A8F79CL, "fe0f1ef8f44f01a9", "20008052c0035fd6"),
         new Patch(Group.NO_ADS, "AdsFreeManager.get_IsAdFree", 0x355D994L, "ffc300d1fe0b00f9", "20008052c0035fd6"),
         new Patch(Group.NO_ADS, "Store.get_ShouldShowAds", 0x34C1E4CL, "20008052c0035fd6", "e0031f2ac0035fd6"),
