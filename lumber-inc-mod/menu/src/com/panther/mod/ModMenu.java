@@ -25,7 +25,7 @@ import android.widget.Toast;
 public final class ModMenu {
     private static final String TAG = "PantherMods";
     private static final String PREFS = "panther_mods";
-    private static final MemPatcher MEM = new MemPatcher();
+    private static MemPatcher MEM;
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static boolean started;
 
@@ -41,6 +41,7 @@ public final class ModMenu {
         try {
             if (started) return;
             started = true;
+            MEM = new MemPatcher(MemPatcher.nativeIo());
             final SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
             attachWhenReady(activity, prefs, 0);
             toast(activity, "Panther Mods loaded");
@@ -51,6 +52,7 @@ public final class ModMenu {
             t.start();
         } catch (Throwable e) {
             Log.e(TAG, "start failed", e);
+            toast(activity, "Panther Mods failed to start: " + e);
         }
     }
 

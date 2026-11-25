@@ -9,4 +9,4 @@ A "Panther Mods loaded" toast shows at start; a small "P" bubble floats on the l
 Switch states are remembered. Balances already raised to 1e236 stay in the save after switching Unlimited Currency off.
 
 Install: uninstall the original game first (signature differs), then install `Lumber.Inc_1.13.3_PantherMenu.apks` with SAI (Split APKs Installer).
-SHA-256: 8171c5f950ed8319b0477c3f68c8457c34db35a3183ff84746b90522bc6be81b
+SHA-256: 56b68a4c8498b29e5d7c361990e1fb309c1ecccc5fd6c0c8d58aebfc7432ffbe
