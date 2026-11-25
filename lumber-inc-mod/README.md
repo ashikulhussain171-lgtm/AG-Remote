@@ -32,5 +32,5 @@ python3 rebuild_apks.py Lumber.Inc_1.13.3.apks libil2cpp.so <outdir>  # writes *
 zipalign -f -p 4 X.unsigned.apk X.aligned.apk && apksigner sign --ks <ks> --out X.apk X.aligned.apk  # both APKs, same key
 ```
 
-`dist/` holds the signed `.apks` split in parts (GitHub 100 MB limit); the
-`lumber-mod-release` workflow joins them and publishes the GitHub release.
+`release/` holds the signed `.apks` as a two-volume 7z (GitHub 100 MB limit); the
+`lumber-mod-release` workflow extracts it and publishes the GitHub release.
