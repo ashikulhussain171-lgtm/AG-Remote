@@ -3,7 +3,7 @@
 import re, sys, zipfile, io
 SIG = re.compile(r'^META-INF/([^/]+\.(SF|RSA|DSA|EC)|MANIFEST\.MF)$')
 
-def repack(src_bytes, dst, replace=None):
+def repack(src_bytes, dst, replace=None, extra=None):
     with zipfile.ZipFile(io.BytesIO(src_bytes)) as zin, zipfile.ZipFile(dst, 'w') as zout:
         for info in zin.infolist():
             if SIG.match(info.filename):
@@ -13,6 +13,9 @@ def repack(src_bytes, dst, replace=None):
             ni.compress_type = info.compress_type
             ni.external_attr = info.external_attr
             zout.writestr(ni, payload, compress_type=info.compress_type, compresslevel=9 if info.compress_type == zipfile.ZIP_DEFLATED else None)
+        for name, payload in (extra or {}).items():
+            ni = zipfile.ZipInfo(name, (1981, 1, 1, 1, 1, 2))
+            zout.writestr(ni, payload, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
 
 if __name__ == '__main__':
     apks, patched_so, outdir = sys.argv[1:4]

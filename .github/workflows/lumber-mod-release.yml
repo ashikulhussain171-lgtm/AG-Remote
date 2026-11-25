@@ -14,16 +14,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Join parts and check hash
+      - name: Extract and check hash
         run: |
-          7z x -y lumber-inc-mod/release/Lumber.Inc_1.13.3_mod.7z.001
-          echo "$(cat lumber-inc-mod/release/SHA256)  Lumber.Inc_1.13.3_mod.apks" | sha256sum -c -
+          ASSET=$(cat lumber-inc-mod/release/ASSET)
+          7z x -y lumber-inc-mod/release/*.7z.001
+          echo "$(cat lumber-inc-mod/release/SHA256)  $ASSET" | sha256sum -c -
+          echo "ASSET=$ASSET" >> "$GITHUB_ENV"
+          echo "TAG=$(cat lumber-inc-mod/release/TAG)" >> "$GITHUB_ENV"
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete lumber-mod-1.13.3 --yes --cleanup-tag || true
-          gh release create lumber-mod-1.13.3 Lumber.Inc_1.13.3_mod.apks \
+          gh release delete "$TAG" --yes --cleanup-tag || true
+          gh release create "$TAG" "$ASSET" \
             --target "$GITHUB_SHA" \
-            --title "Lumber Inc 1.13.3 - currency mod" \
+            --title "Lumber Inc 1.13.3 - Panther Mods menu" \
             --notes-file lumber-inc-mod/RELEASE_NOTES.md
