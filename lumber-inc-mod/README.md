@@ -40,7 +40,7 @@ zipalign -f -p 4 X.unsigned.apk X.aligned.apk && apksigner sign --ks <ks> --out 
 The menu build keeps the **original** `libil2cpp.so` and patches code in memory only while a switch
 is on, so with every switch off the game runs unmodified.
 
-- `menu/src/com/panther/mod/ModMenu.java` — floating "P" bubble (drag / tap) with three switches;
+- `menu/src/com/panther/mod/ModMenu.java` — "P" bubble in its own TYPE_APPLICATION_PANEL window (above the Unity SurfaceView; drag / tap) with three switches;
   states saved in SharedPreferences `panther_mods` and re-applied once `libil2cpp.so` is mapped.
 - `menu/src/com/panther/mod/MemPatcher.java` — finds the module base in `/proc/self/maps`
   (mapping with file offset 0), checks every site holds this build's original or patched bytes,

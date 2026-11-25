@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
 import android.os.Looper;
@@ -13,8 +14,8 @@ import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.CompoundButton;
-import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.Switch;
 import android.widget.TextView;
@@ -41,9 +42,8 @@ public final class ModMenu {
             if (started) return;
             started = true;
             final SharedPreferences prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-            activity.getWindow().getDecorView().post(new Runnable() {
-                @Override public void run() { attach(activity, prefs); }
-            });
+            attachWhenReady(activity, prefs, 0);
+            toast(activity, "Panther Mods loaded");
             Thread t = new Thread(new Runnable() {
                 @Override public void run() { waitForGameAndApply(activity, prefs); }
             }, "PantherModsInit");
@@ -107,10 +107,25 @@ public final class ModMenu {
         };
     }
 
-    private static void attach(final Activity a, final SharedPreferences prefs) {
+    /** The panel is its own sub-window above the game's SurfaceView; it needs the activity's window token. */
+    private static void attachWhenReady(final Activity a, final SharedPreferences prefs, final int tries) {
+        MAIN.postDelayed(new Runnable() {
+            @Override public void run() {
+                if (a.isFinishing()) return;
+                View decor = a.getWindow().getDecorView();
+                if (decor.getWindowToken() == null) {
+                    if (tries < 60) attachWhenReady(a, prefs, tries + 1);
+                    else Log.e(TAG, "no window token, menu not shown");
+                    return;
+                }
+                attach(a, prefs, decor);
+            }
+        }, tries == 0 ? 300 : 500);
+    }
+
+    private static void attach(final Activity a, final SharedPreferences prefs, View decor) {
         try {
-            final ViewGroup decor = (ViewGroup) a.getWindow().getDecorView();
-            final FrameLayout root = new FrameLayout(a);
+            final WindowManager wm = a.getWindowManager();
 
             final TextView bubble = new TextView(a);
             bubble.setText("P");
@@ -144,7 +159,7 @@ public final class ModMenu {
                 panel.addView(sw, new LinearLayout.LayoutParams(dp(a, 200), ViewGroup.LayoutParams.WRAP_CONTENT));
             }
 
-            LinearLayout column = new LinearLayout(a);
+            final LinearLayout column = new LinearLayout(a);
             column.setOrientation(LinearLayout.VERTICAL);
             column.addView(bubble, new LinearLayout.LayoutParams(bs, bs));
             LinearLayout.LayoutParams plp = new LinearLayout.LayoutParams(
@@ -152,24 +167,29 @@ public final class ModMenu {
             plp.topMargin = dp(a, 4);
             column.addView(panel, plp);
 
-            FrameLayout.LayoutParams clp = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.START);
-            root.addView(column, clp);
-            column.setX(dp(a, 4));
-            column.setY(dp(a, 120));
+            final WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                            | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                            | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                    PixelFormat.TRANSLUCENT);
+            lp.gravity = Gravity.TOP | Gravity.START;
+            lp.token = decor.getWindowToken();
+            lp.x = dp(a, 4);
+            lp.y = dp(a, 160);
 
-            final View col = column;
             bubble.setOnTouchListener(new View.OnTouchListener() {
-                float dx, dy, sx, sy;
+                int ox, oy; float sx, sy;
                 @Override public boolean onTouch(View v, MotionEvent e) {
                     switch (e.getActionMasked()) {
                         case MotionEvent.ACTION_DOWN:
-                            dx = col.getX() - e.getRawX(); dy = col.getY() - e.getRawY();
-                            sx = e.getRawX(); sy = e.getRawY();
+                            ox = lp.x; oy = lp.y; sx = e.getRawX(); sy = e.getRawY();
                             return true;
                         case MotionEvent.ACTION_MOVE:
-                            col.setX(Math.max(0, e.getRawX() + dx));
-                            col.setY(Math.max(0, e.getRawY() + dy));
+                            lp.x = Math.max(0, ox + (int) (e.getRawX() - sx));
+                            lp.y = Math.max(0, oy + (int) (e.getRawY() - sy));
+                            wm.updateViewLayout(column, lp);
                             return true;
                         case MotionEvent.ACTION_UP:
                             if (Math.abs(e.getRawX() - sx) < 10 && Math.abs(e.getRawY() - sy) < 10)
@@ -180,11 +200,10 @@ public final class ModMenu {
                 }
             });
 
-            decor.addView(root, new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            root.bringToFront();
+            wm.addView(column, lp);
         } catch (Throwable e) {
             Log.e(TAG, "menu attach failed", e);
+            toast(a, "Panther Mods menu error: " + e);
         }
     }
 
