@@ -40,7 +40,7 @@ zipalign -f -p 4 X.unsigned.apk X.aligned.apk && apksigner sign --ks <ks> --out 
 The menu build keeps the **original** `libil2cpp.so` and patches code in memory only while a switch
 is on, so with every switch off the game runs unmodified.
 
-- `menu/src/com/panther/mod/ModMenu.java` — "P" bubble in its own TYPE_APPLICATION_PANEL window (above the Unity SurfaceView; drag / tap) with three switches;
+- `menu/src/com/panther/mod/ModMenu.java` — "P" bubble in its own TYPE_APPLICATION_PANEL window (above the Unity SurfaceView; drag / tap) with four switches;
   states saved in SharedPreferences `panther_mods` and re-applied once `libil2cpp.so` is mapped.
 - `menu/src/com/panther/mod/MemPatcher.java` — finds the module base in `/proc/self/maps`
   (mapping with file offset 0), checks every site holds this build's original or patched bytes,
@@ -57,6 +57,8 @@ is on, so with every switch off the game runs unmodified.
 | Free Upgrades / Level Up | `0x3156484` | `cset w1, ge` → `mov w1, #1` in `RuntimeResourceSpendable_Basic.RefreshIsSpendable` |
 | | `0x312C178` | `ConstructionResource.DoRemoveAmount` → `ret` |
 | | `0x2EEFF8C` | `SupervisorV2.SupervisorCardResource.DoRemoveAmount` → `ret` |
+| Max Level (1 tap) | `0x4183BB0` | `Upgradable<object>.Upgrade`: `cmp w22, w0` → `subs w22, w22, w0` |
+| | `0x4183C34` | `add w8, w8, #1` → `sub w8, w8, w22` (index jumps to the provider's max) |
 | No Ads | `0x2A8F79C` | `Mediation.get_AdFree` → true (rewarded video rewards without an ad, via `InterceptRv`) |
 | | `0x355D994` | `Screw.Idle.AdsFreeManager.get_IsAdFree` → true |
 | | `0x34C1E4C` | `Screw.Store.get_ShouldShowAds` → false (interstitial + banner gates) |

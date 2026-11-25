@@ -32,6 +32,7 @@ public final class ModMenu {
     private static final Object[][] ITEMS = {
         { Patches.Group.CURRENCY,   "Unlimited Currency" },
         { Patches.Group.FREE_SPEND, "Free Upgrades / Level Up" },
+        { Patches.Group.MAX_LEVEL,  "Max Level (1 tap)" },
         { Patches.Group.NO_ADS,     "No Ads" },
     };
 
