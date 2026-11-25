@@ -2,11 +2,11 @@
 """Lumber Inc 1.13.3 (com.lumber.inc, arm64-v8a) currency floor patch for libil2cpp.so.
 
 Rewrites the two currency ValidateNumber(double d, string label) helpers so that every
-*balance* (labels "amount", "prevAmount", "newAmount") of Gold/Diamond/BizPoint/VillageCoin
-is clamped to at least FLOOR. Input amounts (label "value") pass through unchanged.
+*balance* (labels "amount", "prevAmount", "newAmount")
+of every currency type is clamped to at least FLOOR (1e236). Input amounts (label "value")
+pass through unchanged.
 Effect: balances load at >= FLOOR, every spend is re-clamped back to >= FLOOR, and the
 affordability check (RuntimeResourceSpendable_Basic.RefreshIsSpendable: amount >= cost) passes.
-Reputation and Gear are not touched.
 
 All addresses were measured on this exact build (see EXPECTED_SHA256); the script refuses
 any other input.
@@ -16,7 +16,8 @@ from keystone import Ks, KS_ARCH_ARM64, KS_MODE_LITTLE_ENDIAN
 from capstone import Cs, CS_ARCH_ARM64, CS_MODE_ARM
 
 EXPECTED_SHA256 = "42bea6384d6232a5b6932ab8bef75898900ce7ccbc24b3a8cfc202c2e639c997"
-FLOOR = 999999999.0
+# Requested: 99...9 (224 nines) trillion = 1e236 as a double. Max double is ~1.8e308.
+FLOOR = float("9" * 224 + "e12")
 
 # Build: Lumber.Inc 1.13.3, split_config.arm64_v8a.apk -> lib/arm64-v8a/libil2cpp.so
 # All values are RVAs (== runtime offset from module base). File offset = RVA - 0x4000
@@ -27,12 +28,18 @@ LIT_VALUE_PTR = 0x63221F0
 
 TARGETS = [
     # (name, RVA, function size, field holding the currency enum, enum values to floor)
-    ("CurrencyResourceSelfAmount.ValidateNumber", 0x31552C8, 0x140, 0x6C, (10, 20, 30, 50)),  # CurrencyType_2025 Gold/Diamond/BizPoint/VillageCoin
-    ("CurrencyResourceFromWorld.ValidateNumber",  0x31540E8, 0x140, 0x6C, (1, 2, 16, 64)),     # Currency Gold/Diamond/BizPoint/VillageCoin
+    # kinds=None: every currency type of that class (CurrencyType_2025: Gold 10, Diamond 20, BizPoint 30,
+    # Reputation 40, VillageCoin 50, Gear 60; Currency: Gold 1, Diamond 2, BizPoint 16, Reputation 32,
+    # VillageCoin 64, old event coins 128+).
+    ("CurrencyResourceSelfAmount.ValidateNumber", 0x31552C8, 0x140, 0x6C, None),
+    ("CurrencyResourceFromWorld.ValidateNumber",  0x31540E8, 0x140, 0x6C, None),
 ]
 
 def body(rva, field, kinds):
-    cmp_chain = "".join(f"cmp w9, #{k}\n b.eq floor\n" for k in kinds)
+    if kinds is None:
+        cmp_chain = "b floor\n"
+    else:
+        cmp_chain = "ldr w9, [x0, #%#x]\n" % field + "".join(f"cmp w9, #{k}\n b.eq floor\n" for k in kinds) + "b done\n"
     asm = f"""
         fmov x9, d0
         mvn  x9, x9
@@ -45,15 +52,13 @@ def body(rva, field, kinds):
         ldr  x9, [x9]
         cmp  x1, x9
         b.eq done
-        ldr  w9, [x0, #{field:#x}]
         {cmp_chain}
-        b done
     floor:
         ldr  d1, lit
         fmaxnm d0, d0, d1
     done:
         ret
-        nop
+        .align 3
     lit:
         .quad {struct.unpack('<Q', struct.pack('<d', FLOOR))[0]:#x}
     """

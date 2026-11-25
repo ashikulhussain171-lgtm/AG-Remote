@@ -14,10 +14,10 @@ Both helpers are the only place currency balances are written through: `Validate
 (on load, label `"amount"`), `DoAddAmount` (`"value"`, `"newAmount"`) and `DoRemoveAmount`
 (`"value"`, `"prevAmount"`, `"newAmount"`). The replacement keeps the original non-finite → 0
 rule, passes inputs (label `"value"`, literal slot pointer at `0x63221F0`) through unchanged,
-and clamps balances to ≥ 999,999,999 for:
-
-- `CurrencyResourceSelfAmount` field `0x6C` (`CurrencyType_2025`): Gold 10, Diamond 20, BizPoint 30, VillageCoin 50
-- `CurrencyResourceFromWorld` field `0x6C` (`Currency`): Gold 1, Diamond 2, BizPoint 16, VillageCoin 64
+and clamps every currency balance to ≥ `FLOOR` = 1e236 (224 nines × 10^12, as a double). That
+covers all `CurrencyType_2025` values (Gold 10, Diamond 20, BizPoint 30, Reputation 40,
+VillageCoin 50, Gear 60) and all legacy `Currency` values (Gold 1, Diamond 2, BizPoint 16,
+Reputation 32, VillageCoin 64, event coins 128+). `TARGETS` can still restrict it to a type list.
 
 The "NOT ENOUGH DIAMOND" popup (`NotEnoughDiamondPopup.OpenPopup`) is reached from spend-failed
 handlers; the failing condition is `RuntimeResourceSpendable_Basic.RefreshIsSpendable`
