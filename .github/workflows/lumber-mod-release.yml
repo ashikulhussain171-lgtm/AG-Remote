@@ -1,0 +1,29 @@
+name: Publish Lumber Inc mod
+
+on:
+  push:
+    paths:
+      - 'lumber-inc-mod/dist/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Join parts and check hash
+        run: |
+          cat lumber-inc-mod/dist/Lumber.Inc_1.13.3_mod.apks.part* > Lumber.Inc_1.13.3_mod.apks
+          echo "$(cat lumber-inc-mod/dist/SHA256)  Lumber.Inc_1.13.3_mod.apks" | sha256sum -c -
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete lumber-mod-1.13.3 --yes --cleanup-tag || true
+          gh release create lumber-mod-1.13.3 Lumber.Inc_1.13.3_mod.apks \
+            --target "$GITHUB_SHA" \
+            --title "Lumber Inc 1.13.3 - currency mod" \
+            --notes-file lumber-inc-mod/RELEASE_NOTES.md
